@@ -62,6 +62,7 @@ jobs:
         source-image-type:     PlatformImage
         source-image:          Canonical:UbuntuServer:18.04-LTS:latest
         dist-type:             SharedImageGallery
+        image-builder-template-name: ${{ github.workspace }}/quickquickstarts/helloImageTemplateLinux.json
         dist-resource-id: >
           /subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}
         dist-location:         westus2
