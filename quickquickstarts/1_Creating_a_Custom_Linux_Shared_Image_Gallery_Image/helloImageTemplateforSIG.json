@@ -1,7 +1,7 @@
 {
     "type": "Microsoft.VirtualMachineImages",
     "apiVersion": "2022-02-14",
-    "location": "<region1>",
+    "location": "westus2",
     "dependsOn": [],
     "tags": {
         "imagebuilderTemplate": "AzureImageBuilderSIG",
@@ -76,15 +76,14 @@
         [
             {   
                 "type": "SharedImage",
-                "galleryImageId": "/subscriptions/<subscriptionID>/resourceGroups/<rgName>/providers/Microsoft.Compute/galleries/<sharedImageGalName>/images/<imageDefName>",
-                "runOutputName": "<runOutputName>",
+                "galleryImageId": "/subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage",
+                "runOutputName": "GoldenImage",
                 "artifactTags": {
                     "source": "azureVmImageBuilder",
                     "baseosimg": "ubuntu2004"
                 },
                 "replicationRegions": [
-                  "<region1>",
-                  "<region2>"
+                  "westus2"
                 ]
             }
         ]
