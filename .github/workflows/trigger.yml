@@ -23,25 +23,25 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # - name: CREATE APP BAKED VM IMAGE
-    #   id: imageBuilder
-    #   uses: azure/build-vm-image@v0
-    #   with:
-    #     location: 'eastus'
-    #     resource-group-name: 'raivmdemo-rg'
-    #     managed-identity: 'rai-identity2' # Managed identity as mentioned in pre-requisites.
+    - name: CREATE APP BAKED VM IMAGE
+      id: imageBuilder
+      uses: azure/build-vm-image@v0
+      with:
+        location: 'westus2'
+        resource-group-name: 'rg-connectivity-prod-westus2-example-001'
+        managed-identity: 'rai-identity' # Managed identity as mentioned in pre-requisites.
 
-    #     source-os-type: 'windows'
-    #     source-image-type: 'platformImage'
-    #     source-image: MicrosoftWindowsServer:WindowsServer:2019-Datacenter:latest #unique  identitifier of source image
+        source-os-type: 'windows'
+        source-image-type: 'platformImage'
+        source-image: MicrosoftWindowsServer:WindowsServer:2019-Datacenter:latest #unique  identitifier of source image
 
-    #     customizer-source: '${{ GITHUB.WORKSPACE }}\webApp'  # This folder gets copied tothe   image at location C:\
-    #     customizer-script: |
-    #       & 'c:\webApp\webconfig.ps1'
+        customizer-source: '${{ GITHUB.WORKSPACE }}\webApp'  # This folder gets copied tothe   image at location C:\
+        customizer-script: |
+          & 'c:\webApp\webconfig.ps1'
 
-    #     dist-type: 'SharedImageGallery'
-    #     dist-resource-id: '/subscriptions/${{ secrets.SUBSCRIPTION_ID }}resourceGroups/raivmdemo-rg/providers/Microsoft.Compute/galleries/appImageGallery/images/AppBakedVMs/versions/0.1.${{ GITHUB.RUN_ID }}' #Replace with the resource id of your shared image  gallery's image definition
-    #     dist-location: 'eastus'
+        dist-type: 'SharedImageGallery'
+        dist-resource-id: '/subscriptions/${{ secrets.SUBSCRIPTION_ID }}resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/AppBakedVMs/versions/0.1.${{ GITHUB.RUN_ID }}' #Replace with the resource id of your shared image  gallery's image definition
+        dist-location: 'westus2'
 
     # - name: CREATE VM
     #   uses: azure/CLI@v1
