@@ -31,11 +31,11 @@ jobs:
           source-os-type: "linux"
           source-image-type: "PlatformImage"
           source-image: Canonical:UbuntuServer:18.04-LTS:latest
-          customizer-source: ${{ GITHUB.WORKSPACE }}/workflow-artifacts
-          customizer-script: |
-            sudo mkdir /buildArtifacts
-            sudo cp -r /tmp/ /buildArtifacts/
-            sh /buildArtifacts/workflow-artifacts/install-world.sh
+          # customizer-source: ${{ GITHUB.WORKSPACE }}/workflow-artifacts
+          # customizer-script: |
+          #   sudo mkdir /buildArtifacts
+          #   sudo cp -r /tmp/ /buildArtifacts/
+          #   sh /buildArtifacts/workflow-artifacts/install-world.sh
 
     # - name: CREATE APP BAKED VM IMAGE
     #   id: imageBuilder
