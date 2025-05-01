@@ -9,7 +9,7 @@ plan:
 	cd $(TERRAFORM_DIR) && terraform plan
 
 apply:
-	cd $(TERRAFORM_DIR) && terraform apply -auto-approve
+	cd $(TERRAFORM_DIR) && terraform apply
 
 destroy:
 	cd $(TERRAFORM_DIR) && terraform destroy -auto-approve

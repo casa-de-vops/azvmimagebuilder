@@ -11,4 +11,3 @@ resource "azurerm_shared_image_gallery" "this" {
 
   tags = var.tags
 }
-
