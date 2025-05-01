@@ -5,71 +5,71 @@ permissions:
   contents: read
   id-token: write
   actions: read
-  security-events: write          # only if you surface MSDO results in CodeQL alerts
+  security-events: write # only if you surface MSDO results in CodeQL alerts
 
 env:
-  SEMVERBOT_VERSION: "1.0.0"      # bump here when you need a new semverbot
+  SEMVERBOT_VERSION: "1.0.0" # bump here when you need a new semverbot
 
 jobs:
   BUILD-CUSTOM-IMAGE:
-    runs-on: ubuntu-latest        # ⬅ easiest way to run the Linux binary
+    runs-on: ubuntu-latest # ⬅ easiest way to run the Linux binary
     steps:
-    # ------------------- 1. Code checkout -------------------
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # ------------------- 1. Code checkout -------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # ------------------- 2. Azure login ---------------------
-    - name: Login with Azure OIDC
-      uses: azure/login@v1
-      with:
-        client-id:       ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # ------------------- 2. Azure login ---------------------
+      - name: Login with Azure OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # ------------------- 3. Install semverbot ---------------
-    - name: Install semverbot
-      shell: bash               # make sure we’re in a POSIX shell
-      run: |
-        mkdir -p "$HOME/bin"
-        echo "$HOME/bin" >> "$GITHUB_PATH"
+      # ------------------- 3. Install semverbot ---------------
+      - name: Install semverbot
+        shell: bash # make sure we’re in a POSIX shell
+        run: |
+          mkdir -p "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
 
-        curl -sL \
-          -o "$HOME/bin/sbot" \
-          "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
-        chmod +x "$HOME/bin/sbot"
+          curl -sL \
+            -o "$HOME/bin/sbot" \
+            "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
+          chmod +x "$HOME/bin/sbot"
 
-        # (optional) verify checksum – insert sha256sum here if you wish
-        # echo "<sha256>  $HOME/bin/sbot" | sha256sum -c -
+          # (optional) verify checksum – insert sha256sum here if you wish
+          # echo "<sha256>  $HOME/bin/sbot" | sha256sum -c -
 
-    # ------------------- 4. Compute next version -------------
-    - name: Compute version bump
-      shell: bash
-      run: |
-        sbot update version
-        echo "CURRENT_VERSION=$(sbot get version)"   >> "$GITHUB_ENV"
-        echo "RELEASE_VERSION=$(sbot predict version)" >> "$GITHUB_ENV"
-        echo "Current: $CURRENT_VERSION"
-        echo "Next:    $RELEASE_VERSION"
+      # ------------------- 4. Compute next version -------------
+      - name: Compute version bump
+        shell: bash
+        run: |
+          sbot update version
+          echo "CURRENT_VERSION=$(sbot get version)"   >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$(sbot predict version)" >> "$GITHUB_ENV"
+          echo "Current: $CURRENT_VERSION"
+          echo "Next:    $RELEASE_VERSION"
 
-    # ------------------- 5. Build & distribute image --------
-    - name: Build and distribute custom VM image
-      uses: azure/build-vm-image@v0
-      with:
-        location:              westus2
-        resource-group-name:   rg-connectivity-prod-westus2-example-001
-        managed-identity:      rai-identity
-        source-os-type:        linux
-        source-image-type:     PlatformImage
-        source-image:          Canonical:UbuntuServer:18.04-LTS:latest
-        dist-type:             SharedImageGallery
-        image-builder-template-name: ${{ github.workspace }}/quickquickstarts/helloImageTemplateLinux.json
-        dist-resource-id: >
-          /subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}
-        dist-location:         westus2
+      # ------------------- 5. Build & distribute image --------
+      - name: Build and distribute custom VM image
+        uses: azure/build-vm-image@v0
+        with:
+          location: westus2
+          resource-group-name: rg-connectivity-prod-westus2-example-001
+          managed-identity: rai-identity
+          source-os-type: linux
+          source-image-type: PlatformImage
+          source-image: Canonical:UbuntuServer:18.04-LTS:latest
+          dist-type: SharedImageGallery
+          image-builder-template-name: ${{ github.workspace }}/quickquickstarts/helloImageTemplateLinux.json
+          dist-resource-id: >
+            /subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}
+          dist-location: westus2
 
-    # ------------------- 6. Tag and push the release --------
-    - name: Release and push version tag
-      shell: bash
-      run: |
-        sbot release version
-        sbot push version
+      # ------------------- 6. Tag and push the release --------
+      - name: Release and push version tag
+        shell: bash
+        run: |
+          sbot release version
+          sbot push version
