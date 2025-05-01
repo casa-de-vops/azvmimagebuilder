@@ -22,25 +22,17 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v3
-        with:
-          python-version: '3.x'  # Specify the Python version you need
-  
-      - name: Install Semverbot
+      - name: set up path
         run: |
-          export SEMVERBOT_VERSION=1.0.0
           mkdir bin
           echo "$(pwd)/bin" >> $GITHUB_PATH
+  
+      - name: install semverbot
+        run: |
           curl -o bin/sbot -L https://github.com/restechnica/semverbot/releases/download/v$SEMVERBOT_VERSION/sbot-linux-amd64
           chmod +x bin/sbot
 
-      - name: Set up Git
-        run: |
-          git config --global user.name 'semverbot'
-          git config --global user.email 'semverbot@github.com'
-  
-      - name: Update Version Information
+      - name: update version
         run: |
           sbot update version
           current_version="$(sbot get version)"
@@ -71,25 +63,11 @@ jobs:
           dist-resource-id: '/subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}' #Replace with the resource id of your shared image  gallery's image definition
           dist-location: 'westus2'
 
-    # - name: CREATE APP BAKED VM IMAGE
-    #   id: imageBuilder
-    #   uses: azure/build-vm-image@v0
-    #   with:
-    #     location: 'westus2'
-    #     resource-group-name: 'rg-connectivity-prod-westus2-example-001'
-    #     managed-identity: 'rai-identity' # Managed identity as mentioned in pre-requisites.
-
-    #     source-os-type: 'windows'
-    #     source-image-type: 'platformImage'
-    #     source-image: MicrosoftWindowsServer:WindowsServer:2019-Datacenter:latest #unique  identitifier of source image
-
-    #     customizer-source: '${{ GITHUB.WORKSPACE }}\webApp'  # This folder gets copied tothe   image at location C:\
-    #     customizer-script: |
-    #       & 'c:\webApp\webconfig.ps1'
-
-    #     dist-type: 'SharedImageGallery'
-    #     dist-resource-id: '/subscriptions/${{ secrets.SUBSCRIPTION_ID }}resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/AppBakedVMs/versions/0.1.${{ GITHUB.RUN_ID }}' #Replace with the resource id of your shared image  gallery's image definition
-    #     dist-location: 'westus2'
+      # ... build / publish ...
+      - name: release version
+        run: |
+          sbot release version
+          sbot push version
 
     # - name: CREATE VM
     #   uses: azure/CLI@v1
