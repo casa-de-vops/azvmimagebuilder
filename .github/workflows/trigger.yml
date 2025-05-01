@@ -37,7 +37,7 @@ jobs:
           #   sudo cp -r /tmp/ /buildArtifacts/
           #   sh /buildArtifacts/workflow-artifacts/install-world.sh
           dist-type: 'SharedImageGallery'
-          dist-resource-id: '/subscriptions/${{ secrets.SUBSCRIPTION_ID }}resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/0.1.${{ GITHUB.RUN_ID }}' #Replace with the resource id of your shared image  gallery's image definition
+          dist-resource-id: '/subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/0.1.${{ GITHUB.RUN_ID }}' #Replace with the resource id of your shared image  gallery's image definition
           dist-location: 'westus2'
 
     # - name: CREATE APP BAKED VM IMAGE
