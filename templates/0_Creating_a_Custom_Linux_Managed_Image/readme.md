@@ -1,5 +1,7 @@
 # Create a Custom Managed Image from an Azure Platform Vanilla OS Image
 
+> **MAY 2020 SERVICE ALERT** - Existing users, please ensure you are compliant this [Service Alert by 26th May!!!](https://github.com/danielsollondon/azvmimagebuilder#service-update-may-2020-action-needed-by-26th-may---please-review)
+
 This article is to show you how you can create a basic customized image using the Azure VM Image Builder, and distribute to a region. This covers using mutliple customizations to illustrate some high level functionality:
 
 This covers using mutliple customizations to illustrate some high level functionality:
@@ -28,21 +30,19 @@ az feature show --namespace Microsoft.KeyVault --name VirtualMachineTemplatePrev
 
 # check you are registered for the providers
 
-az provider show -n Microsoft.VirtualMachineImages -o json | grep registrationState
-az provider show -n Microsoft.KeyVault -o json | grep registrationState
-az provider show -n Microsoft.Compute -o json | grep registrationState
-az provider show -n Microsoft.Storage -o json | grep registrationState
-az provider show -n Microsoft.Network -o json | grep registrationState
+az provider show -n Microsoft.VirtualMachineImages | grep registrationState
+az provider show -n Microsoft.Storage | grep registrationState
+az provider show -n Microsoft.Compute | grep registrationState
+az provider show -n Microsoft.KeyVault | grep registrationState
 ```
 
 If they do not show registered, run the commented out code below.
 
 ```bash
 ## az provider register -n Microsoft.VirtualMachineImages
+## az provider register -n Microsoft.Storage
 ## az provider register -n Microsoft.Compute
 ## az provider register -n Microsoft.KeyVault
-## az provider register -n Microsoft.Storage
-# az provider register -n Microsoft.Network
 
 ```
 
@@ -74,21 +74,21 @@ az group create -n $imageResourceGroup -l $location
 ## Create a user identify and assign permissions for the resource group where the image will be created
 
 ### Create User-Assigned Managed Identity and Grant Permissions 
-For more information on User-Assigned Managed Identity, see [here](https://docs.microsoft.com/azure/active-directory/managed-identities-azure-resources/qs-configure-cli-windows-vm#user-assigned-managed-identity).
+For more information on User-Assigned Managed Identity, see [here](https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/qs-configure-cli-windows-vm#user-assigned-managed-identity).
 
 ```bash
 # create user assigned identity for image builder to access the storage account where the script is located
-identityName=aibBuiUserId$(date +'%s')
-az identity create -g $imageResourceGroup -n $identityName
+idenityName=aibBuiUserId$(date +'%s')
+az identity create -g $imageResourceGroup -n $idenityName
 
 # get identity id
-imgBuilderCliId=$(az identity show -g $imageResourceGroup -n $identityName | grep "clientId" | cut -c16- | tr -d '",')
+imgBuilderCliId=$(az identity show -g $imageResourceGroup -n $idenityName | grep "clientId" | cut -c16- | tr -d '",')
 
 # get the user identity URI, needed for the template
-imgBuilderId=/subscriptions/$subscriptionID/resourcegroups/$imageResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$identityName
+imgBuilderId=/subscriptions/$subscriptionID/resourcegroups/$imageResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/$idenityName
 
 # download preconfigured role definition example
-curl https://raw.githubusercontent.com/Azure/azvmimagebuilder/main/solutions/12_Creating_AIB_Security_Roles/aibRoleImageCreation.json -o aibRoleImageCreation.json
+curl https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/solutions/12_Creating_AIB_Security_Roles/aibRoleImageCreation.json -o aibRoleImageCreation.json
 
 imageRoleDefName="Azure Image Builder Image Def"$(date +'%s')
 
@@ -111,7 +111,6 @@ az role assignment create \
 
 ```bash
 # download the example and configure it with your vars
-curl https://raw.githubusercontent.com/Azure/azvmimagebuilder/main/quickquickstarts/0_Creating_a_Custom_Linux_Managed_Image/helloImageTemplateLinux.json -o helloImageTemplateLinux.json
 
 curl https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/0_Creating_a_Custom_Linux_Managed_Image/helloImageTemplateLinux.json -o helloImageTemplateLinux.json
 
@@ -198,4 +197,4 @@ az group delete -n $imageResourceGroup
 ```
 
 ## Next Steps
-If you loved or hated Image Builder, please go to next steps to leave feedback, contact dev team, more documentation, or try more examples.
+If you loved or hated Image Builder, please go to next steps to leave feedback, contact dev team, more documentation, or try more examples [here](../quickquickstarts/nextSteps.md)]

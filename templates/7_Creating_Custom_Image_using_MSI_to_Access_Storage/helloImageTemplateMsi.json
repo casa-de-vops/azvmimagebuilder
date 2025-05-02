@@ -1,6 +1,6 @@
 {
     "type": "Microsoft.VirtualMachineImages/imageTemplates",
-    "apiVersion": "2020-02-14",
+    "apiVersion": "2019-05-01-preview",
     "location": "<region1>",
     "dependsOn": [],
     "tags": {

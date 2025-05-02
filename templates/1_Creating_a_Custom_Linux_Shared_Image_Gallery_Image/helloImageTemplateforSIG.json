@@ -1,78 +1,92 @@
 {
-  "type": "Microsoft.VirtualMachineImages",
-  "apiVersion": "2022-02-14",
-  "location": "westus2",
-  "dependsOn": [],
-  "tags": {
-    "imagebuilderTemplate": "AzureImageBuilderSIG",
-    "userIdentity": "enabled"
-  },
-  "identity": {
-    "type": "UserAssigned"
-  },
+    "type": "Microsoft.VirtualMachineImages",
+    "apiVersion": "2019-05-01-preview",
+    "location": "<region1>",
+    "dependsOn": [],
+    "tags": {
+        "imagebuilderTemplate": "AzureImageBuilderSIG",
+        "userIdentity": "enabled"
+            },
+        "identity": {
+            "type": "UserAssigned",
+                    "userAssignedIdentities": {
+                    "<imgBuilderId>": {}
+                        
+                }
+                },
+    
+    "properties": {
 
-  "properties": {
-    "buildTimeoutInMinutes": 80,
+        "buildTimeoutInMinutes" : 80,
 
-    "vmProfile": {
-      "vmSize": "Standard_D2s_v3",
-      "osDiskSizeGB": 30
-    },
-
-    "source": {
-      "type": "PlatformImage",
-      "publisher": "Canonical",
-      "offer": "0001-com-ubuntu-server-focal",
-      "sku": "20_04-lts-gen2",
-      "version": "latest"
-    },
-    "customize": [
-      {
-        "type": "Shell",
-        "name": "RunScriptFromSource",
-        "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript.sh"
-      },
-
-      {
-        "type": "Shell",
-        "name": "CheckSumCompareShellScript",
-        "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript2.sh",
-        "sha256Checksum": "ade4c5214c3c675e92c66e2d067a870c5b81b9844b3de3cc72c49ff36425fc93"
-      },
-
-      {
-        "type": "File",
-        "name": "downloadBuildArtifacts",
-        "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
-        "destination": "/tmp/index.html"
-      },
-
-      {
-        "type": "Shell",
-        "name": "setupBuildPath",
-        "inline": [
-          "sudo mkdir /buildArtifacts",
-          "sudo cp /tmp/index.html /buildArtifacts/index.html"
-        ]
-      },
-
-      {
-        "type": "Shell",
-        "name": "InstallUpgrades",
-        "inline": ["sudo apt install unattended-upgrades"]
-      }
-    ],
-    "distribute": [
-      {
-        "type": "SharedImage",
-        "galleryImageId": "/subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage",
-        "runOutputName": "GoldenImage",
-        "artifactTags": {
-          "source": "azureVmImageBuilder",
-          "baseosimg": "ubuntu2004"
+        "vmProfile": 
+            {
+            "vmSize": "Standard_D1_v2",
+            "osDiskSizeGB": 30
+            },
+        
+        "source": {
+            "type": "PlatformImage",
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "18.04-LTS",
+                "version": "latest"
+            
         },
-        "replicationRegions": ["westus2"]
-      }
-    ]
-  }
+        "customize": [
+            {
+                "type": "Shell",
+                "name": "RunScriptFromSource",
+                "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript.sh"
+            },
+
+            {
+                "type": "Shell",
+                "name": "CheckSumCompareShellScript",
+                "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript2.sh",
+                "sha256Checksum": "ade4c5214c3c675e92c66e2d067a870c5b81b9844b3de3cc72c49ff36425fc93"
+            },
+        
+            
+            {
+                "type": "File",
+                "name": "downloadBuildArtifacts",
+                "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
+                "destination":"/tmp/index.html"
+            },
+
+            {
+                "type": "Shell",
+                "name": "setupBuildPath",
+                "inline": [
+                    "sudo mkdir /buildArtifacts",
+                    "sudo cp /tmp/index.html /buildArtifacts/index.html"
+                ]
+            },
+
+            {
+                "type": "Shell",
+                "name": "InstallUpgrades",
+                "inline": [
+                    "sudo apt install unattended-upgrades"
+                ]
+            }
+        ],
+        "distribute": 
+        [
+            {   
+                "type": "SharedImage",
+                "galleryImageId": "/subscriptions/<subscriptionID>/resourceGroups/<rgName>/providers/Microsoft.Compute/galleries/<sharedImageGalName>/images/<imageDefName>",
+                "runOutputName": "<runOutputName>",
+                "artifactTags": {
+                    "source": "azureVmImageBuilder",
+                    "baseosimg": "ubuntu1804"
+                },
+                "replicationRegions": [
+                  "<region1>",
+                  "<region2>"
+                ]
+            }
+        ]
+    }
 }
