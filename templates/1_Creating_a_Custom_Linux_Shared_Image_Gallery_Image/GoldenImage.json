@@ -4,7 +4,7 @@
     "location": "westus2",
     "dependsOn": [],
     "tags": {
-        "imagebuilderTemplate": "AzureImageBuilderSIG",
+        "imagebuilderTemplate": "GoldenImage",
         "userIdentity": "enabled"
             },
         "identity": {
