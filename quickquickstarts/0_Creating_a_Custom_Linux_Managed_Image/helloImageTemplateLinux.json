@@ -66,7 +66,7 @@
         "type": "ManagedImage",
         "galleryImageId": "/subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage",
         "location": "westus2",
-        "runOutputName": "<runOutputName>",
+        "runOutputName": "GoldenImage",
         "artifactTags": {
           "source": "azVmImageBuilder",
           "baseosimg": "ubuntu1804"
