@@ -1,6 +1,5 @@
 {
   "type": "Microsoft.VirtualMachineImages/imageTemplates",
-  "apiVersion": "2020-02-14",
   "location": "westus2",
   "dependsOn": [],
   "tags": {
