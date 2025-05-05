@@ -59,13 +59,13 @@ jobs:
           resource-group-name: rg-connectivity-prod-westus2-example-001
           managed-identity: rai-identity
           source-os-type: linux
-          source-image-type: PlatformImage
-          source-image: Canonical:UbuntuServer:18.04-LTS:latest
-          dist-type: SharedImageGallery
+          # source-image-type: PlatformImage
+          # source-image: Canonical:UbuntuServer:18.04-LTS:latest
           image-builder-template-name: ${{ github.workspace }}/templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/GoldenImage.json
-          dist-resource-id: >
-            /subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}
-          dist-location: westus2
+          # dist-type: SharedImageGallery
+          # dist-resource-id: >
+          #   /subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}
+          # dist-location: westus2
 
       # ------------------- 6. Tag and push the release --------
       - name: Release and push version tag
