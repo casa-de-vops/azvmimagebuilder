@@ -51,21 +51,49 @@ jobs:
           echo "Current: $CURRENT_VERSION"
           echo "Next:    $RELEASE_VERSION"
 
+          # ------------------- 5. Download and configure image template -------------
+          - name: Download and configure image template
+            shell: bash
+            env:
+              subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+              sigResourceGroup: rg-connectivity-prod-westus2-example-001
+              imageDefName: GoldenImage
+              sigName: appImageGallery
+              location: westus2
+              additionalregion: westus2
+              runOutputName: GoldenImage
+              imgBuilderId: /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity
+            run: |
+              curl https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/helloImageTemplateforSIG.json -o helloImageTemplateforSIG.json
+
+              sed -i -e "s/<subscriptionID>/$subscriptionID/g" helloImageTemplateforSIG.json
+              sed -i -e "s/<rgName>/$sigResourceGroup/g" helloImageTemplateforSIG.json
+              sed -i -e "s/<imageDefName>/$imageDefName/g" helloImageTemplateforSIG.json
+              sed -i -e "s/<sharedImageGalName>/$sigName/g" helloImageTemplateforSIG.json
+
+              sed -i -e "s/<region1>/$location/g" helloImageTemplateforSIG.json
+              sed -i -e "s/<region2>/$additionalregion/g" helloImageTemplateforSIG.json
+              sed -i -e "s/<runOutputName>/$runOutputName/g" helloImageTemplateforSIG.json
+
+              sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" helloImageTemplateforSIG.json
+
+
+
       # ------------------- 5. Build & distribute image --------
-      - name: Build and distribute custom VM image
-        uses: azure/build-vm-image@v0
-        with:
-          location: westus2
-          resource-group-name: rg-connectivity-prod-westus2-example-001
-          managed-identity: rai-identity
-          source-os-type: linux
-          # source-image-type: PlatformImage
-          # source-image: Canonical:UbuntuServer:18.04-LTS:latest
-          image-builder-template-name: ${{ github.workspace }}/templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/GoldenImage.json
-          # dist-type: SharedImageGallery
-          # dist-resource-id: >
-          #   /subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}
-          # dist-location: westus2
+      # - name: Build and distribute custom VM image
+      #   uses: azure/build-vm-image@v0
+      #   with:
+      #     location: westus2
+      #     resource-group-name: rg-connectivity-prod-westus2-example-001
+      #     managed-identity: rai-identity
+      #     source-os-type: linux
+      #     # source-image-type: PlatformImage
+      #     # source-image: Canonical:UbuntuServer:18.04-LTS:latest
+      #     image-builder-template-name: ${{ github.workspace }}/templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/GoldenImage.json
+      #     # dist-type: SharedImageGallery
+      #     # dist-resource-id: >
+      #     #   /subscriptions/49be4b4d-9619-4d67-afbe-a4244b530748/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.Compute/galleries/appImageGallery/images/GoldenImage/versions/${{ env.CURRENT_VERSION }}
+      #     # dist-location: westus2
 
       # ------------------- 6. Tag and push the release --------
       - name: Release and push version tag
