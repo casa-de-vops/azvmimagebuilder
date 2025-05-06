@@ -51,31 +51,31 @@ jobs:
           echo "Current: $CURRENT_VERSION"
           echo "Next:    $RELEASE_VERSION"
 
-          # ------------------- 5. Download and configure image template -------------
-          - name: Download and configure image template
-            shell: bash
-            env:
-              subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-              sigResourceGroup: rg-connectivity-prod-westus2-example-001
-              imageDefName: GoldenImage
-              sigName: appImageGallery
-              location: westus2
-              additionalregion: westus2
-              runOutputName: GoldenImage
-              imgBuilderId: /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity
-            run: |
-              curl https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/helloImageTemplateforSIG.json -o helloImageTemplateforSIG.json
+      # ------------------- 5. Download and configure image template -------------
+      - name: Download and configure image template
+        shell: bash
+        env:
+          subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          sigResourceGroup: rg-connectivity-prod-westus2-example-001
+          imageDefName: GoldenImage
+          sigName: appImageGallery
+          location: westus2
+          additionalregion: westus2
+          runOutputName: GoldenImage
+          imgBuilderId: /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity
+        run: |
+          curl https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/helloImageTemplateforSIG.json -o helloImageTemplateforSIG.json
 
-              sed -i -e "s/<subscriptionID>/$subscriptionID/g" helloImageTemplateforSIG.json
-              sed -i -e "s/<rgName>/$sigResourceGroup/g" helloImageTemplateforSIG.json
-              sed -i -e "s/<imageDefName>/$imageDefName/g" helloImageTemplateforSIG.json
-              sed -i -e "s/<sharedImageGalName>/$sigName/g" helloImageTemplateforSIG.json
+          sed -i -e "s/<subscriptionID>/$subscriptionID/g" helloImageTemplateforSIG.json
+          sed -i -e "s/<rgName>/$sigResourceGroup/g" helloImageTemplateforSIG.json
+          sed -i -e "s/<imageDefName>/$imageDefName/g" helloImageTemplateforSIG.json
+          sed -i -e "s/<sharedImageGalName>/$sigName/g" helloImageTemplateforSIG.json
 
-              sed -i -e "s/<region1>/$location/g" helloImageTemplateforSIG.json
-              sed -i -e "s/<region2>/$additionalregion/g" helloImageTemplateforSIG.json
-              sed -i -e "s/<runOutputName>/$runOutputName/g" helloImageTemplateforSIG.json
+          sed -i -e "s/<region1>/$location/g" helloImageTemplateforSIG.json
+          sed -i -e "s/<region2>/$additionalregion/g" helloImageTemplateforSIG.json
+          sed -i -e "s/<runOutputName>/$runOutputName/g" helloImageTemplateforSIG.json
 
-              sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" helloImageTemplateforSIG.json
+          sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" helloImageTemplateforSIG.json
 
 
 
