@@ -64,7 +64,7 @@ jobs:
           runOutputName: GoldenImage
           imgBuilderId: /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity
         run: |
-          curl https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/helloImageTemplateforSIG.json -o helloImageTemplateforSIG.json
+          cp templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/helloImageTemplateforSIG.json helloImageTemplateforSIG.json
 
           sed -i -e "s/<subscriptionID>/$subscriptionID/g" helloImageTemplateforSIG.json
           sed -i -e "s/<rgName>/$sigResourceGroup/g" helloImageTemplateforSIG.json
