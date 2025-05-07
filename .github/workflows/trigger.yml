@@ -78,8 +78,33 @@ jobs:
           sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" helloImageTemplateforSIG.json
 
 
-
       # ------------------- 5. Build & distribute image --------
+      - name: Build and distribute custom VM image
+        shell: bash
+        env:
+          subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          sigResourceGroup: rg-connectivity-prod-westus2-example-001
+          imageDefName: GoldenImage
+          sigName: appImageGallery
+          location: westus2
+          additionalregion: westus2
+          runOutputName: GoldenImage
+          imgBuilderId: /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity
+        run: |
+          az resource create \
+          --resource-group $sigResourceGroup \
+          --properties @helloImageTemplateforSIG.json \
+          --is-full-object \
+          --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+          -n helloImageTemplateforSIG01
+          
+
+
+
+
+
+          
+    # # ------------------- 5. Build & distribute image --------
       # - name: Build and distribute custom VM image
       #   uses: azure/build-vm-image@v0
       #   with:
