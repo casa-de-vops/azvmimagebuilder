@@ -60,7 +60,7 @@ jobs:
           imageDefName: GoldenImage
           sigName: appImageGallery
           location: westus2
-          additionalregion: westus2
+          additionalregion: eastus2
           runOutputName: GoldenImage
           imgBuilderId: /subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/rg-connectivity-prod-westus2-example-001/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity
         run: |
