@@ -6,7 +6,7 @@ prefix = "v"
 [semver]
 patch = ["hotfix/", "fix/"]
 minor = ["feature/", "release/"]
-major = ["release/major-", "breaking/"]
+major = ["release/", "breaking/"]
 
 [[version_files]]
 # Friendly name that will show up in SemVerBot logs
