@@ -25,4 +25,5 @@ jobs:
       location: "westus2" # Primary region for building the image
       additionalregion: "eastus2" # Additional region for image replication
       runOutputName: "GoldenImage" # Identifier used for the build output
+      buildOS: "linux" # Operating system type for the image
     secrets: inherit

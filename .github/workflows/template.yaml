@@ -15,6 +15,7 @@ on:
       location: { required: true, type: string }
       additionalregion: { required: true, type: string }
       runOutputName: { required: true, type: string }
+      buildOS: { required: true, type: string, default: "linux", description: "Choose either 'linux' or 'windows'" }
     secrets:
       AZURE_CLIENT_ID: { required: true }
       AZURE_TENANT_ID: { required: true }
@@ -28,7 +29,7 @@ permissions:
 
 jobs:
   BUILD-CUSTOM-IMAGE:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.buildOS == 'windows' && 'windows-latest' || 'ubuntu-latest' }}
     outputs:
       release_version: ${{ steps.set_version.outputs.release_version }}
     steps:
