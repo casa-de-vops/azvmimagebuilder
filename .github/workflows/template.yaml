@@ -155,38 +155,37 @@ jobs:
               -n "$IMAGE_TEMPLATE_NAME" \
               --action Run
 
-        # ── Windows runners ──────────────────────────────────────────
+      # ── Windows runners ──────────────────────────────────────────
       - name: Build and distribute custom VM image (Windows)
-        if: runner.os == 'Windows' # ← new Windows‑specific path
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          imageResourceGroup: ${{ inputs.sigResourceGroup }} # re‑used
-          templateFilePath: ${{ inputs.templateName }} # re‑used
+          imageResourceGroup: ${{ inputs.sigResourceGroup }}
+          templateFilePath: ${{ inputs.templateName }}
           location: ${{ inputs.location }}
           runOutputName: ${{ inputs.runOutputName }}
         run: |
           $ErrorActionPreference = 'Stop'
 
-          # Build a unique image‑template name that matches the Linux path
-          $releaseVersion   = '${{ steps.set_version.outputs.release_version }}'
+          $releaseVersion    = '${{ steps.set_version.outputs.release_version }}'
           $imageTemplateName = "${env:runOutputName}-$releaseVersion"
 
-          # Submit (validate + stage) the template
+          # ── Submit (validate + stage) the template ─────────────────────────────
           New-AzResourceGroupDeployment `
-          -ResourceGroupName $env:imageResourceGroup `
-          -TemplateFile     $env:templateFilePath `
-          -ApiVersion       '2019-05-01-preview' `
-          -imageTemplateName $imageTemplateName `
-          -svclocation      $env:location
+          -ResourceGroupName  $env:imageResourceGroup `
+          -TemplateFile       $env:templateFilePath `
+          -Name               "it-$imageTemplateName" `          # deployment name
+          -imageTemplateName  $imageTemplateName `               # template param
+          -svclocation        $env:location                      # template param
 
-          # Trigger the build
+          # ── Trigger the build ─────────────────────────────────────────────────
           Invoke-AzResourceAction `
-          -ResourceName     $imageTemplateName `
+          -ResourceName      $imageTemplateName `
           -ResourceGroupName $env:imageResourceGroup `
-          -ResourceType     'Microsoft.VirtualMachineImages/imageTemplates' `
-          -ApiVersion       '2019-05-01-preview' `
-          -Action           Run `
+          -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
+          -ApiVersion        '2019-05-01-preview' `
+          -Action            Run `
           -Force
 
       # ---------------------------------------------
