@@ -15,7 +15,13 @@ on:
       location: { required: true, type: string }
       additionalregion: { required: true, type: string }
       runOutputName: { required: true, type: string }
-      buildOS: { required: true, type: string, default: "linux", description: "Choose either 'linux' or 'windows'" }
+      buildOS:
+        {
+          required: true,
+          type: string,
+          default: "linux",
+          description: "Choose either 'linux' or 'windows'",
+        }
     secrets:
       AZURE_CLIENT_ID: { required: true }
       AZURE_TENANT_ID: { required: true }
@@ -45,12 +51,23 @@ jobs:
       # ---------------------------------------------
       # Azure login (OIDC)
       # ---------------------------------------------
-      - name: Login with Azure OIDC
+      - name: Login with Azure OIDC (Linux)
+        if: runner.os != 'Windows'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login with Azure OIDC (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          Install-Module -Name Az -Force -Scope CurrentUser
+          Connect-AzAccount -Identity -Tenant $env:AZURE_TENANT_ID -Subscription $env:AZURE_SUBSCRIPTION_ID
 
       # ---------------------------------------------
       # Normalise branch name so HEAD is on a *local* branch
