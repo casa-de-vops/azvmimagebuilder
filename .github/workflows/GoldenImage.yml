@@ -17,12 +17,12 @@ jobs:
   call-template:
     uses: ./.github/workflows/template.yaml
     with:
-      templateFolder: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image"
-      templateName: "GoldenImage.json"
-      sigResourceGroup: "rg-connectivity-prod-westus2-example-001"
-      imageDefName: "GoldenImage"
-      sigName: "appImageGallery"
-      location: "westus2"
-      additionalregion: "eastus2"
-      runOutputName: "GoldenImage"
+      templateFolder: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image" # Folder containing the image template (located in the ./templates directory)
+      templateName: "GoldenImage.json" # JSON template used for creating the custom VM image
+      sigResourceGroup: "rg-connectivity-prod-westus2-example-001" # Azure resource group for the Shared Image Gallery resources
+      imageDefName: "GoldenImage" # Name for the Image Definition in the gallery
+      sigName: "appImageGallery" # Name of the Shared Image Gallery
+      location: "westus2" # Primary region for building the image
+      additionalregion: "eastus2" # Additional region for image replication
+      runOutputName: "GoldenImage" # Identifier used for the build output
     secrets: inherit
