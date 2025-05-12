@@ -1,9 +1,13 @@
-mode = "git-branch"         # use branch names to decide the bump
+mode = "git-branch"
 
 [git.tags]
-prefix = "v"                # => v1.2.3
+prefix = "v"
 
 [semver]
 patch = ["hotfix/", "fix/"]
 minor = ["feature/", "release/"]
 major = ["release/major-", "breaking/"]
+
+[version_file]
+default = ".version"
+trigger = ".version-trigger"
