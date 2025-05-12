@@ -4,12 +4,13 @@ on:
     inputs:
       versionBump:
         required: true
+        default: "patch"
         type: choice
         description: "Version bump type: major, minor, or patch"
         options:
-          - major
-          - minor
           - patch
+          - minor
+          - major
   push:
     branches: ["main"] # release branch
 
