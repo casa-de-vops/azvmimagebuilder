@@ -164,13 +164,17 @@ jobs:
             -ApiVersion        '2022-07-01' `
             -Force
 
-          # Poll every minute (30 min max) for completion
+          # Poll every minute (30 min max)
           for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep 60
-            $status = (Get-AzImageBuilderTemplate -ResourceGroupName $env:SIG_RG -Name $imageTemplate).LastRunStatus
-            Write-Host ("{0} → {1}" -f $status.RunState, $status.RunSubState)
-            if ($status.RunState -eq 'Succeeded') { break }
-            if ($status.RunState -eq 'Failed')    { throw "Image build failed" }
+            $res = Get-AzResource `
+                    -ResourceGroupName $env:SIG_RG `
+                    -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
+                    -Name              $imageTemplate
+            $status = $res.Properties.lastRunStatus
+            Write-Host ("{0} → {1}" -f $status.runState, $status.runSubState)
+            if ($status.runState -eq 'Succeeded') { break }
+            if ($status.runState -eq 'Failed')    { throw "Image build failed" }
           }
 
       # ── Run summary ─────────────────────────────────────────────

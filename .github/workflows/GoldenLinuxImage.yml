@@ -21,8 +21,9 @@ permissions:
   security-events: write
 
 jobs:
-  call-template:
+  run-image-builder:
     uses: ./.github/workflows/template.yaml
+    name: Build and distribute custom VM image
     with:
       templateFolder: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image" # Folder containing the image template (located in the ./templates directory)
       templateName: "GoldenLinuxImage.json" # JSON template used for creating the custom VM image

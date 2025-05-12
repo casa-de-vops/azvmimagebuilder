@@ -21,7 +21,8 @@ permissions:
   security-events: write
 
 jobs:
-  call-template:
+  run-image-builder:
+    name: Build and distribute custom VM image
     uses: ./.github/workflows/template.yaml
     with:
       templateFolder: "1_Creating_a_Custom_Win_Shared_Image_Gallery_Image" # Folder containing the image template (located in the ./templates directory)
