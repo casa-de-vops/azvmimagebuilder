@@ -3,14 +3,14 @@ name: Resolve Image Builder Template
 on:
   workflow_call:
     inputs:
-      templateFolder: { required: true, type: string }
-      templateName: { required: true, type: string }
+      templateFolder:   { required: true, type: string }
+      templateName:     { required: true, type: string }
       sigResourceGroup: { required: true, type: string }
-      imageDefName: { required: true, type: string }
-      sigName: { required: true, type: string }
-      location: { required: true, type: string }
+      imageDefName:     { required: true, type: string }
+      sigName:          { required: true, type: string }
+      location:         { required: true, type: string }
       additionalregion: { required: true, type: string }
-      runOutputName: { required: true, type: string }
+      runOutputName:    { required: true, type: string }
     secrets:
       AZURE_SUBSCRIPTION_ID: { required: true }
 
@@ -29,17 +29,17 @@ jobs:
       SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     outputs:
-      resolved_path: ${{ steps.outvars.outputs.resolved_path }}
+      resolved_path:     ${{ steps.outvars.outputs.resolved_path }}
       img_template_name: ${{ steps.outvars.outputs.img_template_name }}
-      release_version: ${{ steps.outvars.outputs.release_version }}
+      release_version:   ${{ steps.outvars.outputs.release_version }}
 
     steps:
-      # 1️⃣ Checkout repo (template lives in repo)
+      # 1️⃣ Checkout repository
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # 2️⃣ Echo inputs for quick debugging
+      # 2️⃣ Echo incoming inputs (debug aid)
       - name: Echo inputs
         shell: bash
         run: |
@@ -52,7 +52,7 @@ jobs:
           echo "Replica region  : ${{ inputs.additionalregion }}"
           echo "Run output name : ${{ inputs.runOutputName }}"
 
-      # 3️⃣ Generate timestamp‑based version
+      # 3️⃣ Generate timestamp‑based version string
       - name: Generate version
         id: ver
         shell: bash
@@ -61,29 +61,28 @@ jobs:
           VERSION=$(date +%Y%m%d%H%M%S)
           echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # 4️⃣ Verify the source template exists
+      # 4️⃣ Ensure the source template exists
       - name: Verify template exists
         shell: bash
         run: |
           SRC="templates/${{ inputs.templateFolder }}/${{ inputs.templateName }}"
           [[ -f "$SRC" ]] || { echo "::error::Template not found: $SRC"; exit 1; }
 
-      # 5️⃣ Token replacement
+      # 5️⃣ Replace placeholder tokens
       - name: Replace placeholders
         id: templ
         shell: bash
         env:
-          RG: ${{ inputs.sigResourceGroup }}
-          IMG_DEF: ${{ inputs.imageDefName }}
+          RG:       ${{ inputs.sigResourceGroup }}
+          IMG_DEF:  ${{ inputs.imageDefName }}
           SIG_NAME: ${{ inputs.sigName }}
-          REGION1: ${{ inputs.location }}
-          REGION2: ${{ inputs.additionalregion }}
-          RUN_OUT: ${{ inputs.runOutputName }}
-          VERSION: ${{ steps.ver.outputs.release_version }}
+          REGION1:  ${{ inputs.location }}
+          REGION2:  ${{ inputs.additionalregion }}
+          RUN_OUT:  ${{ inputs.runOutputName }}
         run: |
           set -euo pipefail
           SRC="templates/${{ inputs.templateFolder }}/${{ inputs.templateName }}"
-          TARGET=".resolved-${{ inputs.templateName }}"
+          TARGET="resolved-${{ inputs.templateName }}"          # ← no leading dot
           cp "$SRC" "$TARGET"
 
           IMG_BUILDER_ID="/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
@@ -97,10 +96,10 @@ jobs:
           sed -i -e "s|<runOutputName>|${RUN_OUT}|g"        "$TARGET"
           sed -i -e "s%<imgBuilderId>%${IMG_BUILDER_ID}%g"  "$TARGET"
 
-          # 👇 **declare the output** so later steps pick up the exact filename
+          # expose the file path for later steps & outputs
           echo "resolved_path=$TARGET" >> "$GITHUB_OUTPUT"
 
-      # 6️⃣ Collect job‑level outputs
+      # 6️⃣ Set job‑level outputs
       - name: Set composite outputs
         id: outvars
         shell: bash
@@ -113,7 +112,7 @@ jobs:
           echo "img_template_name=${RUN}-${VER}" >> "$GITHUB_OUTPUT"
           echo "release_version=${VER}"          >> "$GITHUB_OUTPUT"
 
-      # 7️⃣ Upload the resolved template as an artifact
+      # 7️⃣ Upload the resolved template artifact
       - name: Upload resolved template
         uses: actions/upload-artifact@v4
         with:
