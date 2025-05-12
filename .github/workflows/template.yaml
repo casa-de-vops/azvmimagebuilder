@@ -26,13 +26,6 @@ permissions:
   actions: read
   security-events: write
 
-concurrency:
-  group: "semverbot-release-${{ github.ref_name }}"
-  cancel-in-progress: false
-
-env:
-  SEMVERBOT_VERSION: "1.7.2"
-
 jobs:
   BUILD-CUSTOM-IMAGE:
     runs-on: ubuntu-latest
@@ -61,57 +54,36 @@ jobs:
       # ---------------------------------------------
       # Normalise branch name so HEAD is on a *local* branch
       # ---------------------------------------------
-      - name: Prepare branch for SemVerBot
+      - name: Prepare branch for versioning
         id: branch
         shell: bash
         run: |
           set -euo pipefail
-          # 1. Resolve branch name
+          # Resolve branch name
           RAW_BRANCH="${{ github.head_ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$RAW_BRANCH" | sed -e 's#^refs/heads/##' -e 's#[\r\n]##g')
           echo "Resolved branch: $BRANCH_NAME"
 
-          # 2. Make sure we have a *local* branch checked out
+          # Make sure we have a *local* branch checked out
           if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
-            git switch "$BRANCH_NAME"
+              git switch "$BRANCH_NAME"
           else
-            git switch -c "$BRANCH_NAME" --track "origin/$BRANCH_NAME"
+              git switch -c "$BRANCH_NAME" --track "origin/$BRANCH_NAME"
           fi
 
-          # 3. Persist for later steps
           echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
 
       # ---------------------------------------------
-      # Install SemVerBot binary
+      # Set version using a simple timestamp
       # ---------------------------------------------
-      - name: Install SemVerBot
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$HOME/bin"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
-          curl -sL -o "$HOME/bin/sbot" \
-            "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
-          chmod +x "$HOME/bin/sbot"
-
-      # ---------------------------------------------
-      # Compute next semantic version
-      # ---------------------------------------------
-      - name: Compute version bump
+      - name: Set version
         id: set_version
         shell: bash
         run: |
           set -euo pipefail
-          sbot update version
-          current=$(sbot get version)
-          next=$(sbot predict version)
-
-          echo "Current version: $current"
-          echo "Next version:    $next"
-
-          echo "CURRENT_VERSION=$current" >> "$GITHUB_ENV"
-          echo "RELEASE_VERSION=$next"   >> "$GITHUB_ENV"
-          echo "release_version=$next"   >> "$GITHUB_OUTPUT"
+          VERSION=$(date +%Y%m%d%H%M%S)
+          echo "Current version: $VERSION"
+          echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
 
       # ---------------------------------------------
       # Replace tokens in Image Builder template
@@ -133,12 +105,12 @@ jobs:
 
           sed -i -e "s|<subscriptionID>|$subscriptionID|g"             ${{ inputs.templateName }}
           sed -i -e "s|<rgName>|$sigResourceGroup|g"                   ${{ inputs.templateName }}
-          sed -i -e "s|<imageDefName>|$imageDefName|g"                ${{ inputs.templateName }}
-          sed -i -e "s|<sharedImageGalName>|$sigName|g"               ${{ inputs.templateName }}
-          sed -i -e "s|<region1>|$location|g"                         ${{ inputs.templateName }}
-          sed -i -e "s|<region2>|$additionalregion|g"                 ${{ inputs.templateName }}
-          sed -i -e "s|<runOutputName>|$runOutputName|g"              ${{ inputs.templateName }}
-          sed -i -e "s%<imgBuilderId>%$imgBuilderId%g"                ${{ inputs.templateName }}
+          sed -i -e "s|<imageDefName>|$imageDefName|g"                 ${{ inputs.templateName }}
+          sed -i -e "s|<sharedImageGalName>|$sigName|g"                ${{ inputs.templateName }}
+          sed -i -e "s|<region1>|$location|g"                          ${{ inputs.templateName }}
+          sed -i -e "s|<region2>|$additionalregion|g"                  ${{ inputs.templateName }}
+          sed -i -e "s|<runOutputName>|$runOutputName|g"               ${{ inputs.templateName }}
+          sed -i -e "s%<imgBuilderId>%$imgBuilderId%g"                 ${{ inputs.templateName }}
 
       # ---------------------------------------------
       # Build & distribute the image
@@ -159,25 +131,14 @@ jobs:
           IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
 
           az resource create \
-            --resource-group $sigResourceGroup \
-            --properties @${{ inputs.templateName }} \
-            --is-full-object \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            -n "$IMAGE_TEMPLATE_NAME"
+              --resource-group $sigResourceGroup \
+              --properties @${{ inputs.templateName }} \
+              --is-full-object \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              -n "$IMAGE_TEMPLATE_NAME"
 
           az resource invoke-action \
-            --resource-group $sigResourceGroup \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            -n "$IMAGE_TEMPLATE_NAME" \
-            --action Run
-
-      # ---------------------------------------------
-      # Publish the git tag (only on main)
-      # ---------------------------------------------
-      - name: Release and push version tag
-        if: github.ref == 'refs/heads/main'
-        shell: bash
-        run: |
-          set -euo pipefail
-          sbot release version
-          sbot push version
+              --resource-group $sigResourceGroup \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              -n "$IMAGE_TEMPLATE_NAME" \
+              --action Run
