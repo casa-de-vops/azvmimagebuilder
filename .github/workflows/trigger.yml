@@ -2,14 +2,18 @@ name: create_custom_vm_image
 on:
   workflow_dispatch:
     inputs:
-      imageTemplateName:
+      templateFolder:
         required: true
         type: string
-        default: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/helloImageTemplateforSIG.json"
+        default: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image"
+      templateName:
+          required: true
+          type: string
+          default: "helloImageTemplateforSIG.json"
       sigResourceGroup:
-        required: true
-        type: string
-        default: "rg-connectivity-prod-westus2-example-001"
+          required: true
+          type: string
+          default: "rg-connectivity-prod-westus2-example-001"
       imageDefName:
           required: true
           type: string
@@ -44,7 +48,8 @@ jobs:
   call-template:
     uses: ./.github/workflows/template.yaml
     with:
-      imageTemplateName : ${{ github.event.inputs.imageTemplateName }}
+      templateFolder: ${{ github.event.inputs.templateFolder }}
+      templateName : ${{ github.event.inputs.templateName }}
       sigResourceGroup: ${{ github.event.inputs.sigResourceGroup }}
       imageDefName: ${{ github.event.inputs.imageDefName }}
       sigName: ${{ github.event.inputs.sigName }}

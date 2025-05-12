@@ -3,10 +3,14 @@ name: create_custom_vm_image_template
 on:
     workflow_call:
         inputs:
-            imageTemplateName:
+            templateFolder:
                 required: true
                 type: string
-                default: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/helloImageTemplateforSIG.json"
+                default: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image"
+            templateName:
+                required: true
+                type: string
+                default: "helloImageTemplateforSIG.json"
             sigResourceGroup:
                 required: true
                 type: string
@@ -90,18 +94,18 @@ jobs:
                     imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
 
               run: |
-                    cp templates/${{ inputs.imageTemplateName }} helloImageTemplateforSIG.json
+                    cp templates/${{ inputs.templateName }} ${{ inputs.templateName }}
 
-                    sed -i -e "s/<subscriptionID>/$subscriptionID/g" helloImageTemplateforSIG.json
-                    sed -i -e "s/<rgName>/$sigResourceGroup/g" helloImageTemplateforSIG.json
-                    sed -i -e "s/<imageDefName>/$imageDefName/g" helloImageTemplateforSIG.json
-                    sed -i -e "s/<sharedImageGalName>/$sigName/g" helloImageTemplateforSIG.json
+                    sed -i -e "s/<subscriptionID>/$subscriptionID/g" ${{ inputs.templateName }}
+                    sed -i -e "s/<rgName>/$sigResourceGroup/g" ${{ inputs.templateName }}
+                    sed -i -e "s/<imageDefName>/$imageDefName/g" ${{ inputs.templateName }}
+                    sed -i -e "s/<sharedImageGalName>/$sigName/g" ${{ inputs.templateName }}
 
-                    sed -i -e "s/<region1>/$location/g" helloImageTemplateforSIG.json
-                    sed -i -e "s/<region2>/$additionalregion/g" helloImageTemplateforSIG.json
-                    sed -i -e "s/<runOutputName>/$runOutputName/g" helloImageTemplateforSIG.json
+                    sed -i -e "s/<region1>/$location/g" ${{ inputs.templateName }}
+                    sed -i -e "s/<region2>/$additionalregion/g" ${{ inputs.templateName }}
+                    sed -i -e "s/<runOutputName>/$runOutputName/g" ${{ inputs.templateName }}
 
-                    sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" helloImageTemplateforSIG.json
+                    sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" ${{ inputs.templateName }}
 
             - name: Build and distribute custom VM image
               shell: bash
@@ -113,13 +117,13 @@ jobs:
                     location: ${{ inputs.location }}
                     additionalregion: ${{ inputs.additionalregion }}
                     runOutputName: ${{ inputs.runOutputName }}
-                    imgBuilderId: ${{ inputs.imgBuilderId }}
+                    imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
               run: |
-                    IMAGE_TEMPLATE_NAME="helloImageTemplateforSIG-${RELEASE_VERSION}"
+                    IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
 
                     az resource create \
                         --resource-group $sigResourceGroup \
-                        --properties @helloImageTemplateforSIG.json \
+                        --properties @${{ inputs.templateName }} \
                         --is-full-object \
                         --resource-type Microsoft.VirtualMachineImages/imageTemplates \
                         -n "$IMAGE_TEMPLATE_NAME"
