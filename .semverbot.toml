@@ -4,7 +4,7 @@ mode = "git-branch"
 prefix = "v"
 
 [semver]
-patch = ["hotfix/", "fix/", "remotes/origin/hotfix/", "remotes/origin/fix/"]
+patch = ["hotfix/", "fix/", "remotes/origin/hotfix\n", "remotes/origin/fix/"]
 minor = ["feature/", "release/", "remotes/origin/feature/", "remotes/origin/release/"]
 major = ["release/", "breaking/", "remotes/origin/release/", "remotes/origin/breaking/"]
 
