@@ -1,0 +1,17 @@
+name: setup-semverbot
+
+on:
+  workflow_call:
+
+jobs:
+  install-semverbot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install SemVerBot
+        env:
+          SBOT_VER: '1.7.2'
+        run: |
+          curl -sL https://github.com/restechnica/semverbot/releases/download/v$SBOT_VER/sbot-linux-amd64 \
+            -o $RUNNER_TEMP/sbot && chmod +x $RUNNER_TEMP/sbot
+          echo "$RUNNER_TEMP" >> $GITHUB_PATH
+  
