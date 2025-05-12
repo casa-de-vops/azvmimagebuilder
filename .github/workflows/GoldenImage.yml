@@ -1,4 +1,7 @@
-name: create_custom_vm_image
+name: GoldenImage Build and Distribution
+description: |
+  This workflow builds and distributes a custom VM image using the Azure Image Builder service.
+  It uses a template to create a shared image gallery image and distribute it across regions.
 on:
   push:
     branches: ["main"] # release branch

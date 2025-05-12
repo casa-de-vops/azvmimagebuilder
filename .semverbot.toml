@@ -8,6 +8,20 @@ patch = ["hotfix/", "fix/"]
 minor = ["feature/", "release/"]
 major = ["release/major-", "breaking/"]
 
-[version_file]
-default = ".version"
-trigger = ".version-trigger"
+[[version_files]]
+# Friendly name that will show up in SemVerBot logs
+name    = "golden_image_template"
+
+# The file that actually contains the version string
+default = ".github/workflows/GoldenImage.yml"
+
+# A companion/trigger file —​if *either* the default **or** this file
+# changes in a PR, SemVerBot bumps the version for this template
+trigger = "templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/GoldenImage.json"
+
+
+# Add additional entries as needed:
+# [[version_files]]
+# name = "another_template"
+# default = "github/workflows/another-template.yml"
+# trigger = "github/workflows/another-template-trigger"
