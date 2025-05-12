@@ -133,7 +133,7 @@ jobs:
 
           az resource create \
               --resource-group $sigResourceGroup \
-              --properties @${{ inputs.runOutputName }} \
+              --properties @${{ inputs.templateName }} \
               --is-full-object \
               --resource-type Microsoft.VirtualMachineImages/imageTemplates \
               -n "$IMAGE_TEMPLATE_NAME"
