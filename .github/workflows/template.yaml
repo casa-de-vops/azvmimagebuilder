@@ -1,26 +1,26 @@
 name: create_custom_vm_image_template
 
 on:
-    workflow_call:
-        inputs:
-            templateFolder: { required: true, type: string }
-            templateName: { required: true, type: string }
-            sigResourceGroup: { required: true, type: string }
-            imageDefName: { required: true, type: string }
-            sigName: { required: true, type: string }
-            location: { required: true, type: string }
-            additionalregion: { required: true, type: string }
-            runOutputName: { required: true, type: string }
-        secrets:
-            AZURE_CLIENT_ID:
-                required: true
-            AZURE_TENANT_ID:
-                required: true
-            AZURE_SUBSCRIPTION_ID:
-                required: true
+  workflow_call:
+    inputs:
+      templateFolder: { required: true, type: string }
+      templateName: { required: true, type: string }
+      sigResourceGroup: { required: true, type: string }
+      imageDefName: { required: true, type: string }
+      sigName: { required: true, type: string }
+      location: { required: true, type: string }
+      additionalregion: { required: true, type: string }
+      runOutputName: { required: true, type: string }
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
 
 permissions:
-  contents: write      
+  contents: write
   id-token: write
   actions: read
   security-events: write
@@ -30,110 +30,110 @@ concurrency:
   cancel-in-progress: false
 
 env:
-    SEMVERBOT_VERSION: "1.0.0"
+  SEMVERBOT_VERSION: "1.0.0"
 
 jobs:
-    BUILD-CUSTOM-IMAGE:
-        runs-on: ubuntu-latest
-        outputs:
-            release_version: ${{ steps.set_version.outputs.release_version }}
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                fetch-depth: 0
-          
-            - name: Login with Azure OIDC
-              uses: azure/login@v1
-              with:
-                client-id: ${{ secrets.AZURE_CLIENT_ID }}
-                tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-                subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  BUILD-CUSTOM-IMAGE:
+    runs-on: ubuntu-latest
+    outputs:
+      release_version: ${{ steps.set_version.outputs.release_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-            - name: Install semverbot
-              id: install_semverbot
-              shell: bash
-              run: |
-                    mkdir -p "$HOME/bin"
-                    echo "$HOME/bin" >> "$GITHUB_PATH"
-                    curl -sL \
-                        -o "$HOME/bin/sbot" \
-                        "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
-                    chmod +x "$HOME/bin/sbot"
-                    # (optional) verify checksum – insert sha256sum here if you wish
-                    # echo "<sha256>  $HOME/bin/sbot" | sha256sum -c -
+      - name: Login with Azure OIDC
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-            - name: Compute version bump
-              id: set_version
-              shell: bash
-              run: |
-                    sbot update version
-                    current=$(sbot get version)
-                    next=$(sbot predict version)
+      - name: Install semverbot
+        id: install_semverbot
+        shell: bash
+        run: |
+          mkdir -p "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          curl -sL \
+              -o "$HOME/bin/sbot" \
+              "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
+          chmod +x "$HOME/bin/sbot"
+          # (optional) verify checksum – insert sha256sum here if you wish
+          # echo "<sha256>  $HOME/bin/sbot" | sha256sum -c -
 
-                    echo "Current version: $current"
-                    echo "Next version:    $next"
+      - name: Compute version bump
+        id: set_version
+        shell: bash
+        run: |
+          sbot update version
+          current=$(sbot get version)
+          next=$(sbot predict version)
 
-                    # expose to later steps & as job output
-                    echo "CURRENT_VERSION=$current" >> "$GITHUB_ENV"
-                    echo "RELEASE_VERSION=$next"   >> "$GITHUB_ENV"
-                    echo "release_version=$next"   >> "$GITHUB_OUTPUT"
+          echo "Current version: $current"
+          echo "Next version:    $next"
 
-            - name: Download and configure image template
-              shell: bash
-              env:
-                    subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-                    sigResourceGroup: ${{ inputs.sigResourceGroup }}
-                    imageDefName: ${{ inputs.imageDefName }}
-                    sigName: ${{ inputs.sigName }}
-                    location: ${{ inputs.location }}
-                    additionalregion: ${{ inputs.additionalregion }}
-                    runOutputName: ${{ inputs.runOutputName }}
-                    imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
+          # expose to later steps & as job output
+          echo "CURRENT_VERSION=$current" >> "$GITHUB_ENV"
+          echo "RELEASE_VERSION=$next"   >> "$GITHUB_ENV"
+          echo "release_version=$next"   >> "$GITHUB_OUTPUT"
 
-              run: |
-                    cp templates/${{ inputs.templateFolder }}/${{ inputs.templateName }} ${{ inputs.templateName }}
+      - name: Download and configure image template
+        shell: bash
+        env:
+          subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          sigResourceGroup: ${{ inputs.sigResourceGroup }}
+          imageDefName: ${{ inputs.imageDefName }}
+          sigName: ${{ inputs.sigName }}
+          location: ${{ inputs.location }}
+          additionalregion: ${{ inputs.additionalregion }}
+          runOutputName: ${{ inputs.runOutputName }}
+          imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
 
-                    sed -i -e "s/<subscriptionID>/$subscriptionID/g" ${{ inputs.templateName }}
-                    sed -i -e "s/<rgName>/$sigResourceGroup/g" ${{ inputs.templateName }}
-                    sed -i -e "s/<imageDefName>/$imageDefName/g" ${{ inputs.templateName }}
-                    sed -i -e "s/<sharedImageGalName>/$sigName/g" ${{ inputs.templateName }}
+        run: |
+          cp templates/${{ inputs.templateFolder }}/${{ inputs.templateName }} ${{ inputs.templateName }}
 
-                    sed -i -e "s/<region1>/$location/g" ${{ inputs.templateName }}
-                    sed -i -e "s/<region2>/$additionalregion/g" ${{ inputs.templateName }}
-                    sed -i -e "s/<runOutputName>/$runOutputName/g" ${{ inputs.templateName }}
+          sed -i -e "s/<subscriptionID>/$subscriptionID/g" ${{ inputs.templateName }}
+          sed -i -e "s/<rgName>/$sigResourceGroup/g" ${{ inputs.templateName }}
+          sed -i -e "s/<imageDefName>/$imageDefName/g" ${{ inputs.templateName }}
+          sed -i -e "s/<sharedImageGalName>/$sigName/g" ${{ inputs.templateName }}
 
-                    sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" ${{ inputs.templateName }}
+          sed -i -e "s/<region1>/$location/g" ${{ inputs.templateName }}
+          sed -i -e "s/<region2>/$additionalregion/g" ${{ inputs.templateName }}
+          sed -i -e "s/<runOutputName>/$runOutputName/g" ${{ inputs.templateName }}
 
-            - name: Build and distribute custom VM image
-              shell: bash
-              env:
-                    subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-                    sigResourceGroup: ${{ inputs.sigResourceGroup }}
-                    imageDefName: ${{ inputs.imageDefName }}
-                    sigName: ${{ inputs.sigName }}
-                    location: ${{ inputs.location }}
-                    additionalregion: ${{ inputs.additionalregion }}
-                    runOutputName: ${{ inputs.runOutputName }}
-                    imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
-              run: |
-                    IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
+          sed -i -e "s%<imgBuilderId>%$imgBuilderId%g" ${{ inputs.templateName }}
 
-                    az resource create \
-                        --resource-group $sigResourceGroup \
-                        --properties @${{ inputs.templateName }} \
-                        --is-full-object \
-                        --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-                        -n "$IMAGE_TEMPLATE_NAME"
+      - name: Build and distribute custom VM image
+        shell: bash
+        env:
+          subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          sigResourceGroup: ${{ inputs.sigResourceGroup }}
+          imageDefName: ${{ inputs.imageDefName }}
+          sigName: ${{ inputs.sigName }}
+          location: ${{ inputs.location }}
+          additionalregion: ${{ inputs.additionalregion }}
+          runOutputName: ${{ inputs.runOutputName }}
+          imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
+        run: |
+          IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
 
-                    az resource invoke-action \
-                        --resource-group $sigResourceGroup \
-                        --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-                        -n "$IMAGE_TEMPLATE_NAME" \
-                        --action Run
+          az resource create \
+              --resource-group $sigResourceGroup \
+              --properties @${{ inputs.templateName }} \
+              --is-full-object \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              -n "$IMAGE_TEMPLATE_NAME"
 
-            - name: Release and push version tag
-              shell: bash
-              run: |
-                    sbot release version
-                    sbot push version
+          az resource invoke-action \
+              --resource-group $sigResourceGroup \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              -n "$IMAGE_TEMPLATE_NAME" \
+              --action Run
+
+      - name: Release and push version tag
+        shell: bash
+        run: |
+          sbot release version
+          sbot push version
