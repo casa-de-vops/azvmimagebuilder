@@ -31,7 +31,7 @@ permissions:
 
 jobs:
   resolve:
-    uses: ./.github/workflows/tasks/resolve.yml
+    uses: ./.github/workflows/resolve.yml
     with:
       templateFolder: ${{ inputs.templateFolder }}
       templateName: ${{ inputs.templateName }}
@@ -45,7 +45,7 @@ jobs:
 
   validate:
     needs: resolve
-    uses: ./.github/workflows/tasks/validate.yml
+    uses: ./.github/workflows/validate.yml
     with:
       resolved_path: ${{ needs.resolve.outputs.resolved_path }}
       sigResourceGroup: ${{ inputs.sigResourceGroup }}
@@ -90,7 +90,7 @@ jobs:
 
   # summary:
   #   needs: [resolve, validate, build]
-  #   uses: ./.github/workflows/tasks/summary.yml
+  #   uses: ./.github/workflows/summary.yml
   #   with:
   #     imgTemplateName: ${{ needs.resolve.outputs.img_template_name }}
   #     releaseVersion: ${{ needs.resolve.outputs.release_version }}
