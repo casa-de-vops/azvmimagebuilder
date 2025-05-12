@@ -111,20 +111,20 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
-          IMAGE_TEMPLATE_NAME="${RUN_OUTPUT}-${RELEASE_VERSION}"
+          IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
 
           az resource create \
-            --resource-group "$SIG_RG" \
-            --properties @"$TEMPLATE_FILE" \
-            --is-full-object \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            --name "$IMAGE_TEMPLATE_NAME"
+              --resource-group $sigResourceGroup \
+              --properties @"${{ inputs.templateName }}" \
+              --is-full-object \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              -n "$IMAGE_TEMPLATE_NAME"
 
           az resource invoke-action \
-            --resource-group "$SIG_RG" \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            --name "$IMAGE_TEMPLATE_NAME" \
-            --action Run
+              --resource-group $sigResourceGroup \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              -n "$IMAGE_TEMPLATE_NAME" \
+              --action Run
 
           # az image builder wait \
           #   --resource-group "$SIG_RG" \
@@ -139,7 +139,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
-          $imageTemplate  = "${env:RUN_OUTPUT}-$releaseVersion"
+          $imageTemplate  = "${{ inputs.runOutputName }}-$releaseVersion"
 
           # --- Build the parameter object expected by your template ---
           $templateParams = @{
@@ -183,4 +183,4 @@ jobs:
         shell: bash
         run: |
           echo "### Azure Image Builder output" >> "$GITHUB_STEP_SUMMARY"
-          echo "*Template:* **${RUN_OUTPUT}-${{ steps.set_version.outputs.release_version }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Template:* **${{ inputs.runOutputName }}-${{ steps.set_version.outputs.release_version }}**" >> "$GITHUB_STEP_SUMMARY"
