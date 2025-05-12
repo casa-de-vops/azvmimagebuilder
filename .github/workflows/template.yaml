@@ -145,7 +145,7 @@ jobs:
           $templateParams = @{
               imageTemplateName = $imageTemplate
               svclocation       = $env:PRIMARY_REGION
-              api-version       = '2022-07-01'   # <-- Option A: pass the missing parameter
+              api-version       = '2022-07-01'
           }
 
           # Submit the template
