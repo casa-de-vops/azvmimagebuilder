@@ -39,12 +39,18 @@ jobs:
     outputs:
       release_version: ${{ steps.set_version.outputs.release_version }}
     steps:
+      # ---------------------------------------------
+      # Checkout repo with full history & tags
+      # ---------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
+      # ---------------------------------------------
+      # Azure login (OIDC)
+      # ---------------------------------------------
       - name: Login with Azure OIDC
         uses: azure/login@v2
         with:
@@ -53,35 +59,32 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # ---------------------------------------------
-      # Identify the branch name for SemVerBot 👍
+      # Normalise branch name so HEAD is on a *local* branch
       # ---------------------------------------------
-      - name: Detect branch name
-        id: detect_branch
+      - name: Prepare branch for SemVerBot
+        id: branch
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -n "${{ github.head_ref }}" ]]; then
-            RAW_BRANCH="${{ github.head_ref }}"
-          else
-            RAW_BRANCH="${{ github.ref_name }}"
-          fi
-          # strip possible CR/LF and refs/* prefixes just in case
+          # 1. Resolve branch name
+          RAW_BRANCH="${{ github.head_ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$RAW_BRANCH" | sed -e 's#^refs/heads/##' -e 's#[\r\n]##g')
-          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
-          echo "Using branch: $BRANCH_NAME"
+          echo "Resolved branch: $BRANCH_NAME"
 
-      - name: Ensure local checkout of branch
-        shell: bash
-        run: |
-          set -euo pipefail
+          # 2. Make sure we have a *local* branch checked out
           if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
-            git checkout "$BRANCH_NAME"
+            git switch "$BRANCH_NAME"
           else
-            git checkout -b "$BRANCH_NAME" --track "origin/$BRANCH_NAME"
+            git switch -c "$BRANCH_NAME" --track "origin/$BRANCH_NAME"
           fi
 
+          # 3. Persist for later steps
+          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
+
+      # ---------------------------------------------
+      # Install SemVerBot binary
+      # ---------------------------------------------
       - name: Install SemVerBot
-        id: install_semverbot
         shell: bash
         run: |
           set -euo pipefail
@@ -91,6 +94,9 @@ jobs:
             "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
           chmod +x "$HOME/bin/sbot"
 
+      # ---------------------------------------------
+      # Compute next semantic version
+      # ---------------------------------------------
       - name: Compute version bump
         id: set_version
         shell: bash
@@ -107,6 +113,9 @@ jobs:
           echo "RELEASE_VERSION=$next"   >> "$GITHUB_ENV"
           echo "release_version=$next"   >> "$GITHUB_OUTPUT"
 
+      # ---------------------------------------------
+      # Replace tokens in Image Builder template
+      # ---------------------------------------------
       - name: Download and configure image template
         shell: bash
         env:
@@ -131,6 +140,9 @@ jobs:
           sed -i -e "s|<runOutputName>|$runOutputName|g"              ${{ inputs.templateName }}
           sed -i -e "s%<imgBuilderId>%$imgBuilderId%g"                ${{ inputs.templateName }}
 
+      # ---------------------------------------------
+      # Build & distribute the image
+      # ---------------------------------------------
       - name: Build and distribute custom VM image
         shell: bash
         env:
@@ -159,6 +171,9 @@ jobs:
             -n "$IMAGE_TEMPLATE_NAME" \
             --action Run
 
+      # ---------------------------------------------
+      # Publish the git tag (only on main)
+      # ---------------------------------------------
       - name: Release and push version tag
         if: github.ref == 'refs/heads/main'
         shell: bash
