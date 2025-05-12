@@ -18,7 +18,7 @@ jobs:
     uses: ./.github/workflows/template.yaml
     with:
       templateFolder: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image"
-      templateName: "helloImageTemplateforSIG.json"
+      templateName: "GoldenImage.json"
       sigResourceGroup: "rg-connectivity-prod-westus2-example-001"
       imageDefName: "GoldenImage"
       sigName: "appImageGallery"
