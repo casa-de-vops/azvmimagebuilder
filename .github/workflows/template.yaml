@@ -1,8 +1,9 @@
 name: "[Template] Build and distribute custom VM image"
 
 description: |
-  This workflow builds and distributes a custom VM image using the Azure Image Builder service.
-  It uses a template to create a shared image gallery image and distribute it across regions.
+  Builds a custom VM image with Azure Image Builder and publishes it to a Shared Image
+  Gallery. The template expects a Packer‑style JSON under `templates/<folder>/<file>` and
+  replaces placeholder tokens before submission.
 
 on:
   workflow_call:
@@ -12,9 +13,10 @@ on:
       sigResourceGroup: { required: true, type: string }
       imageDefName: { required: true, type: string }
       sigName: { required: true, type: string }
-      location: { required: true, type: string }
-      additionalregion: { required: true, type: string }
-      runOutputName: { required: true, type: string }
+      # callers may omit if they always build in one region
+      location: { required: true, type: string, default: "westus2" }
+      additionalregion: { required: false, type: string, default: "eastus2" }
+      runOutputName: { required: true, type: string, default: "GoldenImage" }
     secrets:
       AZURE_CLIENT_ID: { required: true }
       AZURE_TENANT_ID: { required: true }
@@ -27,119 +29,96 @@ permissions:
   security-events: write
 
 jobs:
-  BUILD-CUSTOM-IMAGE:
+  build-image:
+    name: Build & Distribute Image
     runs-on: ubuntu-latest
+    env: # ── DRY: shared across steps ─────────────────────
+      SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      IMG_DEF: ${{ inputs.imageDefName }}
+      SIG_NAME: ${{ inputs.sigName }}
+      LOC: ${{ inputs.location }}
+      ADD_LOC: ${{ inputs.additionalregion }}
+      RUN_OUT: ${{ inputs.runOutputName }}
+      IMG_ID: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
+      TEMPLATE_PATH: templates/${{ inputs.templateFolder }}/${{ inputs.templateName }}
     outputs:
-      release_version: ${{ steps.set_version.outputs.release_version }}
+      release_version: ${{ steps.version.outputs.release_version }}
     steps:
-      # ---------------------------------------------
-      # Checkout repo with full history & tags
-      # ---------------------------------------------
+      # ──────────────────────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          fetch-tags: true
 
-      # ---------------------------------------------
-      # Azure login (OIDC)
-      # ---------------------------------------------
-      - name: Login with Azure OIDC
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Azure OIDC login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # ---------------------------------------------
-      # Normalise branch name so HEAD is on a *local* branch
-      # ---------------------------------------------
-      - name: Prepare branch for versioning
-        id: branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Resolve branch name
-          RAW_BRANCH="${{ github.head_ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$RAW_BRANCH" | sed -e 's#^refs/heads/##' -e 's#[\r\n]##g')
-          echo "Resolved branch: $BRANCH_NAME"
+      # Ensure required extension is present (idempotent)
+      - name: Install Image Builder extension
+        run: az extension add --name image-builder --yes
 
-          # Make sure we have a *local* branch checked out
-          if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
-              git switch "$BRANCH_NAME"
-          else
-              git switch -c "$BRANCH_NAME" --track "origin/$BRANCH_NAME"
-          fi
-
-          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
-
-      # ---------------------------------------------
-      # Set version using a simple timestamp
-      # ---------------------------------------------
-      - name: Set version
-        id: set_version
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Generate release version (timestamp)
+        id: version
         shell: bash
         run: |
           set -euo pipefail
           VERSION=$(date +%Y%m%d%H%M%S)
-          echo "Current version: $VERSION"
-          echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_version=$VERSION" | tee -a "$GITHUB_OUTPUT"
 
-      # ---------------------------------------------
-      # Replace tokens in Image Builder template
-      # ---------------------------------------------
-      - name: Download and configure image template
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Prepare image template
         shell: bash
-        env:
-          subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          sigResourceGroup: ${{ inputs.sigResourceGroup }}
-          imageDefName: ${{ inputs.imageDefName }}
-          sigName: ${{ inputs.sigName }}
-          location: ${{ inputs.location }}
-          additionalregion: ${{ inputs.additionalregion }}
-          runOutputName: ${{ inputs.runOutputName }}
-          imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
         run: |
           set -euo pipefail
-          cp templates/${{ inputs.templateFolder }}/${{ inputs.templateName }} ${{ inputs.templateName }}
+          cp "$TEMPLATE_PATH" ./processed-template.json
 
-          sed -i -e "s|<subscriptionID>|$subscriptionID|g"             ${{ inputs.templateName }}
-          sed -i -e "s|<rgName>|$sigResourceGroup|g"                   ${{ inputs.templateName }}
-          sed -i -e "s|<imageDefName>|$imageDefName|g"                 ${{ inputs.templateName }}
-          sed -i -e "s|<sharedImageGalName>|$sigName|g"                ${{ inputs.templateName }}
-          sed -i -e "s|<region1>|$location|g"                          ${{ inputs.templateName }}
-          sed -i -e "s|<region2>|$additionalregion|g"                  ${{ inputs.templateName }}
-          sed -i -e "s|<runOutputName>|$runOutputName|g"               ${{ inputs.templateName }}
-          sed -i -e "s%<imgBuilderId>%$imgBuilderId%g"                 ${{ inputs.templateName }}
+          declare -a TOKENS=(
+            "<subscriptionID>=$SUB_ID"
+            "<rgName>=$SIG_RG"
+            "<imageDefName>=$IMG_DEF"
+            "<sharedImageGalName>=$SIG_NAME"
+            "<region1>=$LOC"
+            "<region2>=$ADD_LOC"
+            "<runOutputName>=$RUN_OUT"
+            "<imgBuilderId>=$IMG_ID"
+          )
 
-      # ---------------------------------------------
-      # Build & distribute the image
-      # ---------------------------------------------
-      - name: Build and distribute custom VM image
+          for pair in "${TOKENS[@]}"; do
+            IFS='=' read -r search replace <<< "$pair"
+            sed -i -e "s|${search}|${replace}|g" processed-template.json
+          done
+
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Build & distribute custom VM image
         shell: bash
-        env:
-          subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          sigResourceGroup: ${{ inputs.sigResourceGroup }}
-          imageDefName: ${{ inputs.imageDefName }}
-          sigName: ${{ inputs.sigName }}
-          location: ${{ inputs.location }}
-          additionalregion: ${{ inputs.additionalregion }}
-          runOutputName: ${{ inputs.runOutputName }}
-          imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
         run: |
           set -euo pipefail
-          RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
-          IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
+          TEMPLATE_NAME="${{ inputs.templateName }}-${{ steps.version.outputs.release_version }}"
 
           az resource create \
-              --resource-group $sigResourceGroup \
-              --properties @${{ inputs.templateName }} \
-              --is-full-object \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME"
+            --resource-group "$SIG_RG" \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --name "$TEMPLATE_NAME" \
+            --is-full-object \
+            --properties @processed-template.json
 
           az resource invoke-action \
-              --resource-group $sigResourceGroup \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME" \
-              --action Run
+            --resource-group "$SIG_RG" \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --name "$TEMPLATE_NAME" \
+            --action Run
+
+      # ──────────────────────────────────────────────────────────────────────────
+      - name: Expose resource ID for downstream jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMPLATE_ID="/subscriptions/$SUB_ID/resourceGroups/$SIG_RG/providers/Microsoft.VirtualMachineImages/imageTemplates/${{ inputs.templateName }}-${{ steps.version.outputs.release_version }}"
+          echo "template_id=$TEMPLATE_ID" | tee -a "$GITHUB_OUTPUT"
