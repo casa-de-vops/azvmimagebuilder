@@ -4,11 +4,15 @@ description: |
   It uses a template to create a shared image gallery image and distribute it across regions.
 on:
   push:
+    branches: ["main"] # still limit to main
+    paths:
+      - "templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/**" # any file in that folder
+      - ".github/workflows/GoldenLinuxImage.yml" # keep if you really want it
+  pull_request: # run on PRs targeting main
     branches: ["main"]
     paths:
-      - templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/GoldenLinuxImage.json
-      - .github/workflows/GoldenLinuxImage.yml
-  workflow_dispatch:
+      - "templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/**"
+  workflow_dispatch: # manual run button
 
 permissions:
   contents: write
