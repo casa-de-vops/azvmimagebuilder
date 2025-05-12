@@ -13,8 +13,8 @@ resource "azurerm_shared_image_gallery" "this" {
   tags = var.tags
 }
 
-resource "azurerm_shared_image" "this" {
-  name                = "GoldenImage"
+resource "azurerm_shared_image" "linux" {
+  name                = "GoldenLinuxImage"
   gallery_name        = azurerm_shared_image_gallery.this.name
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
@@ -24,5 +24,19 @@ resource "azurerm_shared_image" "this" {
     publisher = "Canonical"
     offer     = "0001-com-ubuntu-server-focal"
     sku       = "20_04-lts-gen2"
+  }
+}
+
+resource "azurerm_shared_image" "windows" {
+  name                = "GoldenWindowsImage"
+  gallery_name        = azurerm_shared_image_gallery.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  os_type             = "Windows"
+
+  identifier {
+    publisher = "MicrosoftWindowsServer"
+    offer     = "WindowsServer"
+    sku       = "2019-Datacenter"
   }
 }

@@ -27,11 +27,11 @@ resource "azurerm_user_assigned_identity" "this" {
   name                = "rai-identity"
 }
 
-resource "azurerm_role_assignment" "this" {
-  principal_id   = azurerm_user_assigned_identity.this.principal_id
-  role_definition_name = azurerm_role_definition.this.name
-  scope          = azurerm_resource_group.this.id
-}
+# resource "azurerm_role_assignment" "this" {
+#   principal_id   = azurerm_user_assigned_identity.this.principal_id
+#   role_definition_name = azurerm_role_definition.this.name
+#   scope          = azurerm_resource_group.this.id
+# }
 
 resource "azurerm_role_assignment" "owner" {
   principal_id   = azurerm_user_assigned_identity.this.principal_id
