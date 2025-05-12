@@ -3,14 +3,12 @@ name: Validate Image Builder Template
 on:
   workflow_call:
     inputs:
-      # Path to the resolved template uploaded by the resolve task
+      # artifact path + metadata produced by resolve
       resolved_path: { required: true, type: string }
-      # Resource group where AIB resources will live (needed for validation scope)
       sigResourceGroup: { required: true, type: string }
-      # Unique name the resolve task produced, e.g. GoldenWindows‑20250512…
       imgTemplateName: { required: true, type: string }
-      # Primary location (parameter 'svclocation' in your template)
       location: { required: true, type: string }
+      buildOS: { required: true, type: string } # linux | windows
     secrets:
       AZURE_SUBSCRIPTION_ID: { required: true }
       AZURE_CLIENT_ID: { required: true }
@@ -23,26 +21,39 @@ on:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+    # pick the runner that matches buildOS
+    runs-on: ${{ inputs.buildOS == 'windows' && 'windows-latest' || 'ubuntu-latest' }}
 
-      # ⬇︎ download the template produced by resolve
+    outputs:
+      validated: ${{ steps.pass.outputs.ok }}
+
+    steps:
+      #######################################################################
+      # 1.  Get the template file that resolve.yml uploaded
+      #######################################################################
       - name: Download resolved template
         uses: actions/download-artifact@v4
         with:
           name: resolved-image-template
           path: .
 
+      #######################################################################
+      # 2.  Azure login (OIDC)
+      #######################################################################
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: ${{ inputs.buildOS == 'windows' }} # only needed on Win
 
-      - name: Validate template
+      #######################################################################
+      # 3.  OS‑specific validation paths
+      #######################################################################
+      # ── Linux runner ─────────────────────────────────────────────────────
+      - name: Validate template (az CLI)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
@@ -53,6 +64,31 @@ jobs:
                              svclocation="${{ inputs.location }}" \
                              api-version='2022-07-01' \
             --only-show-errors
-          echo "Template validation ✅"
+          echo "Template validation ✅ (Linux)"
 
-      # expose success output as before …
+      # ── Windows runner ───────────────────────────────────────────────────
+      - name: Validate template (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $params = @{
+            imageTemplateName = '${{ inputs.imgTemplateName }}'
+            svclocation       = '${{ inputs.location }}'
+            'api-version'     = '2022-07-01'
+          }
+          Test-AzResourceGroupDeployment `
+            -ResourceGroupName  '${{ inputs.sigResourceGroup }}' `
+            -TemplateFile       '${{ inputs.resolved_path }}' `
+            -TemplateParameterObject $params `
+            -Verbose
+          Write-Host "Template validation ✅ (Windows)"
+
+      #######################################################################
+      # 4.  Mark success for downstream jobs
+      #######################################################################
+      - name: Set success output
+        id: pass
+        if: success() # only runs when previous step succeeded
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
