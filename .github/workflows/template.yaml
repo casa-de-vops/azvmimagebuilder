@@ -2,9 +2,11 @@
 name: "[Template] Build and distribute custom VM image"
 
 description: |
-  Reusable workflow that builds and distributes a custom VM image with
-  Azure Image Builder (AIB) and publishes the resolved template as an
-  artifact.
+  Reusable workflow that
+   • validates,   • builds,   • waits for completion,   • publishes
+  a custom VM image with Azure Image Builder (AIB).
+  Extra QoL: input echo, template existence check, validation pass/fail,
+  coloured log sections, and a run‑summary at the end.
 
 on:
   workflow_call:
@@ -57,7 +59,7 @@ jobs:
       release_version: ${{ steps.set_version.outputs.release_version }}
 
     steps:
-      # ─────────────────────────────────────────────────────────────
+      # ──────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -72,7 +74,21 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
-      # ── Version = run‑number‑shortSHA ───────────────────────────
+      # ── Pretty‑print the inputs so the log always shows what ran ──
+      - name: Show inputs
+        shell: bash
+        run: |
+          echo -e "\e[34m### Image build inputs\e[0m"
+          echo "Template folder : $TEMPLATE_DIR"
+          echo "Template file   : $TEMPLATE_FILE"
+          echo "SIG RG          : $SIG_RG"
+          echo "Image def name  : $IMAGE_DEF"
+          echo "SIG name        : $SIG_NAME"
+          echo "Primary region  : $PRIMARY_REGION"
+          echo "Replica region  : $ADDL_REGION"
+          echo "Runner OS       : ${{ inputs.buildOS }}"
+
+      # ── Version = run‑number‑shortSHA ─────────────────────────
       - name: Set version
         id: set_version
         shell: bash
@@ -81,8 +97,19 @@ jobs:
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           VERSION="${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
           echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo -e "\e[32mVersion string set to $VERSION\e[0m"
 
-      # ── Resolve template tokens ─────────────────────────────────
+      # ── Confirm template file exists (fail early) ────────────
+      - name: Check template file exists
+        shell: bash
+        run: |
+          if [[ ! -f "$TEMPLATE_DIR/$TEMPLATE_FILE" ]]; then
+            echo -e "\e[31m❌ Template not found: $TEMPLATE_DIR/$TEMPLATE_FILE\e[0m"
+            exit 1
+          fi
+          echo -e "\e[32m✔ Template found\e[0m"
+
+      # ── Resolve template tokens ──────────────────────────────
       - name: Resolve image template parameters
         shell: bash
         run: |
@@ -98,89 +125,127 @@ jobs:
           sed -i -e "s|<runOutputName>|$RUN_OUTPUT|g"     "$TEMPLATE_FILE"
           sed -i -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
 
+      # ── Upload resolved template for troubleshooting ─────────
       - name: Upload resolved template
         uses: actions/upload-artifact@v4
         with:
           name: resolved-image-template
           path: ${{ env.TEMPLATE_FILE }}
 
-      # ── Linux build path ────────────────────────────────────────
-      - name: Build & distribute image (Linux)
+      # ════════════════════════════════════════════════════════
+      #                       LINUX PATH
+      # ════════════════════════════════════════════════════════
+      - name: Install AIB CLI extension & validate template (Linux)
         if: inputs.buildOS != 'windows'
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
-          IMAGE_TEMPLATE_NAME="${RUN_OUTPUT}-${RELEASE_VERSION}"
+          echo "##[group]Install/validate"
+          az extension add --name image-builder --upgrade
+          az deployment group validate \
+            --resource-group "$SIG_RG" \
+            --template-file "$TEMPLATE_FILE" \
+            --parameters imageTemplateName="${RUN_OUTPUT}-${{ steps.set_version.outputs.release_version }}" svclocation="$PRIMARY_REGION" api-version='2022-07-01'
+          echo -e "\e[32m✔ Template validation succeeded\e[0m"
+          echo "##[endgroup]"
 
+      - name: Build & wait (Linux)
+        if: inputs.buildOS != 'windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_TEMPLATE_NAME="${RUN_OUTPUT}-${{ steps.set_version.outputs.release_version }}"
+          echo "##[group]Build"
           az resource create \
-            --resource-group "$SIG_RG" \
-            --properties @"$TEMPLATE_FILE" \
-            --is-full-object \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            --name "$IMAGE_TEMPLATE_NAME"
-
+              --resource-group "$SIG_RG" \
+              --properties @"$TEMPLATE_FILE" \
+              --is-full-object \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              --name "$IMAGE_TEMPLATE_NAME"
           az resource invoke-action \
-            --resource-group "$SIG_RG" \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            --name "$IMAGE_TEMPLATE_NAME" \
-            --action Run
-
+              --resource-group "$SIG_RG" \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              --name "$IMAGE_TEMPLATE_NAME" \
+              --action Run
           az image builder wait \
-            --resource-group "$SIG_RG" \
-            --name "$IMAGE_TEMPLATE_NAME" \
-            --created
+              --resource-group "$SIG_RG" \
+              --name "$IMAGE_TEMPLATE_NAME" \
+              --created
+          echo -e "\e[32m🎉 Linux image build succeeded\e[0m"
+          echo "##[endgroup]"
 
-      # ── Windows build path ──────────────────────────────────────
-      - name: Build & distribute image (Windows)
+      # ════════════════════════════════════════════════════════
+      #                      WINDOWS PATH
+      # ════════════════════════════════════════════════════════
+      - name: Validate template (Windows)
+        if: inputs.buildOS == 'windows'
+        shell: pwsh
+        run: |
+          Write-Host "##[group]Install/validate"
+          $ErrorActionPreference = 'Stop'
+          $params = @{
+            imageTemplateName = "${env:RUN_OUTPUT}-${{ steps.set_version.outputs.release_version }}"
+            svclocation       = $env:PRIMARY_REGION
+            'api-version'     = '2022-07-01'
+          }
+          Test-AzResourceGroupDeployment `
+            -ResourceGroupName  $env:SIG_RG `
+            -TemplateFile       $env:TEMPLATE_FILE `
+            -TemplateParameterObject $params `
+            -Verbose
+          Write-Host "✅ Template validation passed"
+          Write-Host "##[endgroup]"
+
+      - name: Build & wait (Windows)
         if: inputs.buildOS == 'windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-
+          $ProgressPreference    = 'SilentlyContinue'
           $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
           $imageTemplate  = "${env:RUN_OUTPUT}-$releaseVersion"
 
-          # --- Build the parameter object expected by your template ---
+          Write-Host "##[group]Build"
           $templateParams = @{
-              imageTemplateName = $imageTemplate
-              svclocation       = $env:PRIMARY_REGION
-              'api-version'       = '2022-07-01'
+            imageTemplateName = $imageTemplate
+            svclocation       = $env:PRIMARY_REGION
+            'api-version'     = '2022-07-01'
           }
-
-          # Submit the template
           New-AzResourceGroupDeployment `
-            -ResourceGroupName  $env:SIG_RG `
-            -TemplateFile       $env:TEMPLATE_FILE `
-            -Name               "it-$imageTemplate" `
-            -TemplateParameterObject $templateParams
+            -ResourceGroupName $env:SIG_RG `
+            -TemplateFile      $env:TEMPLATE_FILE `
+            -Name              "it-$imageTemplate" `
+            -TemplateParameterObject $templateParams `
+            -Verbose
 
-          # Invoke build
           Invoke-AzResourceAction `
             -ResourceGroupName $env:SIG_RG `
             -Name              $imageTemplate `
             -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
             -Action            Run `
             -ApiVersion        '2022-07-01' `
-            -Force
+            -Force `
+            -Verbose
 
-          # Poll every minute (30 min max)
+          Write-Host "Build started; polling every 60 s (max 30 min)…"
           for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep 60
-            $res = Get-AzResource `
-                    -ResourceGroupName $env:SIG_RG `
-                    -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
-                    -Name              $imageTemplate
-            $status = $res.Properties.lastRunStatus
-            Write-Host ("{0} → {1}" -f $status.runState, $status.runSubState)
+            $status = (Get-AzResource -ResourceGroupName $env:SIG_RG `
+                                      -ResourceType Microsoft.VirtualMachineImages/imageTemplates `
+                                      -Name $imageTemplate).Properties.lastRunStatus
+            Write-Host ("{0:HH:mm:ss} ► {1}/{2}" -f (Get-Date), $status.runState, $status.runSubState)
             if ($status.runState -eq 'Succeeded') { break }
-            if ($status.runState -eq 'Failed')    { throw "Image build failed" }
+            if ($status.runState -eq 'Failed')    { throw "❌ Image build failed" }
           }
+          Write-Host "🎉 Windows image build succeeded"
+          Write-Host "##[endgroup]"
 
-      # ── Run summary ─────────────────────────────────────────────
+      # ── Run summary (common) ─────────────────────────────────
       - name: Post run summary
         if: always()
         shell: bash
         run: |
-          echo "### Azure Image Builder output" >> "$GITHUB_STEP_SUMMARY"
-          echo "*Template:* **${RUN_OUTPUT}-${{ steps.set_version.outputs.release_version }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Azure Image Builder run summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Template : **${RUN_OUTPUT}-${{ steps.set_version.outputs.release_version }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Runner   : **${{ inputs.buildOS }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status   : $([[ ${{ job.status }} == 'success' ]] && echo ✅ || echo ❌)" >> "$GITHUB_STEP_SUMMARY"
