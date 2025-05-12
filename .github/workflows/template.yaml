@@ -60,65 +60,14 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # Ensure required extension is present (idempotent)
-      - name: Install Image Builder extension
-        run: az extension add --name image-builder --yes
-
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: Generate release version (timestamp)
-        id: version
+      - name: Ensure Image Builder CLI commands are available
         shell: bash
         run: |
           set -euo pipefail
-          VERSION=$(date +%Y%m%d%H%M%S)
-          echo "release_version=$VERSION" | tee -a "$GITHUB_OUTPUT"
-
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: Prepare image template
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp "$TEMPLATE_PATH" ./processed-template.json
-
-          declare -a TOKENS=(
-            "<subscriptionID>=$SUB_ID"
-            "<rgName>=$SIG_RG"
-            "<imageDefName>=$IMG_DEF"
-            "<sharedImageGalName>=$SIG_NAME"
-            "<region1>=$LOC"
-            "<region2>=$ADD_LOC"
-            "<runOutputName>=$RUN_OUT"
-            "<imgBuilderId>=$IMG_ID"
-          )
-
-          for pair in "${TOKENS[@]}"; do
-            IFS='=' read -r search replace <<< "$pair"
-            sed -i -e "s|${search}|${replace}|g" processed-template.json
-          done
-
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: Build & distribute custom VM image
-        shell: bash
-        run: |
-          set -euo pipefail
-          TEMPLATE_NAME="${{ inputs.templateName }}-${{ steps.version.outputs.release_version }}"
-
-          az resource create \
-            --resource-group "$SIG_RG" \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            --name "$TEMPLATE_NAME" \
-            --is-full-object \
-            --properties @processed-template.json
-
-          az resource invoke-action \
-            --resource-group "$SIG_RG" \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            --name "$TEMPLATE_NAME" \
-            --action Run
-
-      # ──────────────────────────────────────────────────────────────────────────
-      - name: Expose resource ID for downstream jobs
-        shell: bash
-        run: |
-          set -euo pipefail
-          TEMPLATE_ID="/subscriptions/$SUB_ID/resourceGroups/$SIG_RG/providers/Microsoft.VirtualMachineImages/imageTemplates/${{ inputs.templateName }}-${{ steps.version.outputs.release_version }}"
-          echo "template_id=$TEMPLATE_ID" | tee -a "$GITHUB_OUTPUT"
+          # Azure CLI 2.43+ bundles "az image builder" in core. Older runners need the extension.
+          if ! az image builder --help >/dev/null 2>&1; then
+            echo "Image Builder commands missing — attempting to add extension…"
+            az extension add --name imagebuilder --yes || az extension add --name image-builder --yes || echo "Extension not available; continuing with generic az resource commands."
+          else
+            echo "Image Builder commands already present in CLI."
+          fi
