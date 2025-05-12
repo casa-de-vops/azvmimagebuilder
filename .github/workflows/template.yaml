@@ -51,6 +51,21 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # ---------------------------------------------
+      # Identify the branch name for SemVerBot 👍
+      # ---------------------------------------------
+      - name: Detect branch name
+        id: branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ github.head_ref }}" ]]; then
+            echo "BRANCH_NAME=${{ github.head_ref }}" >> "$GITHUB_ENV"
+          else
+            echo "BRANCH_NAME=${{ github.ref_name }}" >> "$GITHUB_ENV"
+          fi
+          echo "Using branch: $BRANCH_NAME"
+
       - name: Install semverbot
         id: install_semverbot
         shell: bash
@@ -67,9 +82,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sbot update version
+          sbot update version --branch "$BRANCH_NAME"
           current=$(sbot get version)
-          next=$(sbot predict version)
+          next=$(sbot predict version --branch "$BRANCH_NAME")
 
           echo "Current version: $current"
           echo "Next version:    $next"
