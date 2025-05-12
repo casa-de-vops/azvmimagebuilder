@@ -114,14 +114,14 @@ jobs:
           IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
 
           az resource create \
-              --resource-group $sigResourceGroup \
+              --resource-group $SIG_RG \
               --properties @"${{ inputs.templateName }}" \
               --is-full-object \
               --resource-type Microsoft.VirtualMachineImages/imageTemplates \
               -n "$IMAGE_TEMPLATE_NAME"
 
           az resource invoke-action \
-              --resource-group $sigResourceGroup \
+              --resource-group $SIG_RG \
               --resource-type Microsoft.VirtualMachineImages/imageTemplates \
               -n "$IMAGE_TEMPLATE_NAME" \
               --action Run
