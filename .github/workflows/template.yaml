@@ -60,10 +60,12 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -n "${{ github.head_ref }}" ]]; then
-            echo "BRANCH_NAME=${{ github.head_ref }}" >> "$GITHUB_ENV"
+            BRANCH_NAME="${{ github.head_ref }}"
           else
-            echo "BRANCH_NAME=${{ github.ref_name }}" >> "$GITHUB_ENV"
+            BRANCH_NAME="${{ github.ref_name }}"
           fi
+          # persist for later steps
+          echo "BRANCH_NAME=$BRANCH_NAME" >> "$GITHUB_ENV"
           echo "Using branch: $BRANCH_NAME"
 
       - name: Install semverbot
