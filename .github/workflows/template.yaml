@@ -112,10 +112,13 @@ jobs:
           sed -i -e "s|<runOutputName>|$runOutputName|g"               ${{ inputs.templateName }}
           sed -i -e "s%<imgBuilderId>%$imgBuilderId%g"                 ${{ inputs.templateName }}
 
-      # ---------------------------------------------
-      # Build & distribute the image
-      # ---------------------------------------------
-      - name: Build and distribute custom VM image
+        # ─────────────────────────────────────────────────────────────
+        # Build and distribute custom VM image – dual‑OS implementation
+        # ─────────────────────────────────────────────────────────────
+
+        # ── Linux / macOS runners ────────────────────────────────────
+      - name: Build and distribute custom VM image (Linux)
+        if: runner.os != 'Windows' # ← original path unchanged
         shell: bash
         env:
           subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -133,7 +136,7 @@ jobs:
 
           az resource create \
               --resource-group $sigResourceGroup \
-              --properties @${{ inputs.templateName }} \
+              --properties @"${{ inputs.templateName }}" \
               --is-full-object \
               --resource-type Microsoft.VirtualMachineImages/imageTemplates \
               -n "$IMAGE_TEMPLATE_NAME"
@@ -143,3 +146,69 @@ jobs:
               --resource-type Microsoft.VirtualMachineImages/imageTemplates \
               -n "$IMAGE_TEMPLATE_NAME" \
               --action Run
+
+        # ── Windows runners ──────────────────────────────────────────
+      - name: Build and distribute custom VM image (Windows)
+        if: runner.os == 'Windows' # ← new Windows‑specific path
+        shell: pwsh
+        env:
+          subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          imageResourceGroup: ${{ inputs.sigResourceGroup }} # re‑used
+          templateFilePath: ${{ inputs.templateName }} # re‑used
+          location: ${{ inputs.location }}
+          runOutputName: ${{ inputs.runOutputName }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Build a unique image‑template name that matches the Linux path
+          $releaseVersion   = '${{ steps.set_version.outputs.release_version }}'
+          $imageTemplateName = "${env:runOutputName}-$releaseVersion"
+
+          # Submit (validate + stage) the template
+          New-AzResourceGroupDeployment `
+          -ResourceGroupName $env:imageResourceGroup `
+          -TemplateFile     $env:templateFilePath `
+          -ApiVersion       '2019-05-01-preview' `
+          -imageTemplateName $imageTemplateName `
+          -svclocation      $env:location
+
+          # Trigger the build
+          Invoke-AzResourceAction `
+          -ResourceName     $imageTemplateName `
+          -ResourceGroupName $env:imageResourceGroup `
+          -ResourceType     'Microsoft.VirtualMachineImages/imageTemplates' `
+          -ApiVersion       '2019-05-01-preview' `
+          -Action           Run `
+          -Force
+
+      # ---------------------------------------------
+      # Build & distribute the image
+      # ---------------------------------------------
+    #   - name: Build and distribute custom VM image
+    #     shell: bash
+    #     env:
+    #       subscriptionID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    #       sigResourceGroup: ${{ inputs.sigResourceGroup }}
+    #       imageDefName: ${{ inputs.imageDefName }}
+    #       sigName: ${{ inputs.sigName }}
+    #       location: ${{ inputs.location }}
+    #       additionalregion: ${{ inputs.additionalregion }}
+    #       runOutputName: ${{ inputs.runOutputName }}
+    #       imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
+    #     run: |
+    #       set -euo pipefail
+    #       RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
+    #       IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
+
+    #       az resource create \
+    #           --resource-group $sigResourceGroup \
+    #           --properties @${{ inputs.templateName }} \
+    #           --is-full-object \
+    #           --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+    #           -n "$IMAGE_TEMPLATE_NAME"
+
+    #       az resource invoke-action \
+    #           --resource-group $sigResourceGroup \
+    #           --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+    #           -n "$IMAGE_TEMPLATE_NAME" \
+    #           --action Run
