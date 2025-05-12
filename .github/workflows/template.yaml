@@ -3,8 +3,8 @@ name: "[Template] Build and distribute custom VM image"
 
 description: |
   Reusable workflow that builds and distributes a custom VM image with
-  Azure Image Builder (AIB) and publishes the resolved template as a
-  build artifact.
+  Azure Image Builder (AIB) and publishes the resolved template as an
+  artifact.
 
 on:
   workflow_call:
@@ -72,13 +72,14 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
-      # ── Version = run number‑short SHA ───────────────────────────
+      # ── Version = run‑number‑shortSHA  (fixed) ──────────────────
       - name: Set version
         id: set_version
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${{ github.run_number }}-${{ github.sha::0:7 }}"
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          VERSION="${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
           echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
 
       # ── Resolve template tokens ─────────────────────────────────
@@ -125,7 +126,6 @@ jobs:
             --name "$IMAGE_TEMPLATE_NAME" \
             --action Run
 
-          # Wait until the build completes
           az image builder wait \
             --resource-group "$SIG_RG" \
             --name "$IMAGE_TEMPLATE_NAME" \
@@ -138,10 +138,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $releaseVersion   = '${{ steps.set_version.outputs.release_version }}'
-          $imageTemplate    = "${env:RUN_OUTPUT}-$releaseVersion"
+          $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
+          $imageTemplate  = "${env:RUN_OUTPUT}-$releaseVersion"
 
-          # Submit the template
           New-AzResourceGroupDeployment `
             -ResourceGroupName  $env:SIG_RG `
             -TemplateFile       $env:TEMPLATE_FILE `
@@ -151,7 +150,6 @@ jobs:
                 svclocation       = $env:PRIMARY_REGION
               }
 
-          # Invoke build
           Invoke-AzResourceAction `
             -ResourceGroupName $env:SIG_RG `
             -Name              $imageTemplate `
@@ -160,7 +158,6 @@ jobs:
             -ApiVersion        '2022-07-01' `
             -Force
 
-          # Poll every minute (30 min max) for completion
           for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep 60
             $status = (Get-AzImageBuilderTemplate -ResourceGroupName $env:SIG_RG -Name $imageTemplate).LastRunStatus
