@@ -44,6 +44,7 @@ jobs:
   call-template:
     uses: ./.github/workflows/template.yaml
     with:
+      imageTemplateName : ${{ github.event.inputs.imageTemplateName }}
       sigResourceGroup: ${{ github.event.inputs.sigResourceGroup }}
       imageDefName: ${{ github.event.inputs.imageDefName }}
       sigName: ${{ github.event.inputs.sigName }}
