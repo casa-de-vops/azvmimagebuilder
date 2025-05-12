@@ -128,11 +128,12 @@ jobs:
           imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
         run: |
           set -euo pipefail
+          RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
           IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
 
           az resource create \
               --resource-group $sigResourceGroup \
-              --properties @${{ inputs.templateName }} \
+              --properties @${{ inputs.runOutputName }} \
               --is-full-object \
               --resource-type Microsoft.VirtualMachineImages/imageTemplates \
               -n "$IMAGE_TEMPLATE_NAME"
