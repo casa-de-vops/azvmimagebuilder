@@ -129,7 +129,7 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
-          IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
+          IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
 
           az resource create \
               --resource-group $sigResourceGroup \
