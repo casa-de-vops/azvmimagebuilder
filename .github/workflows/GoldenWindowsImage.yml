@@ -4,11 +4,11 @@ description: |
   It uses a template to create a shared image gallery image and distribute it across regions.
 on:
   push:
-    branches: ["main"] # release branch
+    branches: [main]
     paths:
-      - templates/1_Creating_a_Custom_Win_Shared_Image_Gallery_Image/GoldenWindowsImage.json # Path to the JSON template file
-      - .github/workflows/GoldenWindowsImage.yml # Path to this workflow file
-  workflow_dispatch: # manual
+      - templates/1_Creating_a_Custom_Win_Shared_Image_Gallery_Image/GoldenWindowsImage.json
+      - .github/workflows/GoldenWindowsImage.yml
+  workflow_dispatch:
 
 permissions:
   contents: write

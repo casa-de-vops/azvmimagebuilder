@@ -155,7 +155,7 @@ jobs:
               -n "$IMAGE_TEMPLATE_NAME" \
               --action Run
 
-      # ── Windows runners ──────────────────────────────────────────
+        # ── Windows runners ──────────────────────────────────────────
       - name: Build and distribute custom VM image (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -171,15 +171,21 @@ jobs:
           $releaseVersion    = '${{ steps.set_version.outputs.release_version }}'
           $imageTemplateName = "${env:runOutputName}-$releaseVersion"
 
-          # ── Submit (validate + stage) the template ─────────────────────────────
-          New-AzResourceGroupDeployment `
-          -ResourceGroupName  $env:imageResourceGroup `
-          -TemplateFile       $env:templateFilePath `
-          -Name               "it-$imageTemplateName" `          # deployment name
-          -imageTemplateName  $imageTemplateName `               # template param
-          -svclocation        $env:location                      # template param
+          # ── Build the parameter object expected by your template ──────────────
+          $templateParams = @{
+              "imageTemplateName" = $imageTemplateName
+              "svclocation"       = $env:location
+              "api-version"       = "2019-05-01-preview"   # parameter name contains a dash
+          }
 
-          # ── Trigger the build ─────────────────────────────────────────────────
+          # ── Submit (validate + stage) the template ────────────────────────────
+          New-AzResourceGroupDeployment `
+          -ResourceGroupName      $env:imageResourceGroup `
+          -TemplateFile           $env:templateFilePath `
+          -Name                   "it-$imageTemplateName" `
+          -TemplateParameterObject $templateParams
+
+          # ── Trigger the build ────────────────────────────────────────────────
           Invoke-AzResourceAction `
           -ResourceName      $imageTemplateName `
           -ResourceGroupName $env:imageResourceGroup `
