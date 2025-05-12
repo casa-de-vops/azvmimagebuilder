@@ -13,9 +13,6 @@ permissions:
   actions: read
   security-events: write
 
-env:
-  SEMVERBOT_VERSION: "1.0.0"
-
 jobs:
   call-template:
     uses: ./.github/workflows/template.yaml
