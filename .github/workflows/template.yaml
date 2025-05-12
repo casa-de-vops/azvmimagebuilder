@@ -126,10 +126,10 @@ jobs:
             --name "$IMAGE_TEMPLATE_NAME" \
             --action Run
 
-          az image builder wait \
-            --resource-group "$SIG_RG" \
-            --name "$IMAGE_TEMPLATE_NAME" \
-            --created
+          # az image builder wait \
+          #   --resource-group "$SIG_RG" \
+          #   --name "$IMAGE_TEMPLATE_NAME" \
+          #   --created
 
       # ── Windows build path ──────────────────────────────────────
       - name: Build & distribute image (Windows)
