@@ -4,9 +4,9 @@ mode = "git-branch"
 prefix = "v"
 
 [semver]
-patch = ["hotfix/", "fix/"]
-minor = ["feature/", "release/"]
-major = ["release/", "breaking/"]
+patch = ["hotfix/", "fix/", "remotes/origin/hotfix/", "remotes/origin/fix/"]
+minor = ["feature/", "release/", "remotes/origin/feature/", "remotes/origin/release/"]
+major = ["release/", "breaking/", "remotes/origin/release/", "remotes/origin/breaking/"]
 
 [[version_files]]
 # Friendly name that will show up in SemVerBot logs
