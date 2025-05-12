@@ -28,8 +28,8 @@ on:
       AZURE_SUBSCRIPTION_ID: { required: true }
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: false
 
 permissions:
   contents: write
