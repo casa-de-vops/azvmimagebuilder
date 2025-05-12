@@ -1,0 +1,28 @@
+name: WindowsImage Build and Distribution
+description: |
+  This workflow builds and distributes a custom VM image using the Azure Image Builder service.
+  It uses a template to create a shared image gallery image and distribute it across regions.
+on:
+  push:
+    branches: ["main"] # release branch
+  workflow_dispatch: # manual
+
+permissions:
+  contents: write
+  id-token: write
+  actions: read
+  security-events: write
+
+jobs:
+  call-template:
+    uses: ./.github/workflows/template.yaml
+    with:
+      templateFolder: "1_Creating_a_Custom_Win_Shared_Image_Gallery_Image" # Folder containing the image template (located in the ./templates directory)
+      templateName: "WindowsImage.json" # JSON template used for creating the custom VM image
+      sigResourceGroup: "rg-connectivity-prod-westus2-example-001" # Azure resource group for the Shared Image Gallery resources
+      imageDefName: "WindowsImage" # Name for the Image Definition in the gallery
+      sigName: "appImageGallery" # Name of the Shared Image Gallery
+      location: "westus2" # Primary region for building the image
+      additionalregion: "eastus2" # Additional region for image replication
+      runOutputName: "WindowsImage" # Identifier used for the build output
+    secrets: inherit
