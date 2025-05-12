@@ -3,32 +3,14 @@ name: create_custom_vm_image_template
 on:
     workflow_call:
         inputs:
-            templateFolder:
-                required: true
-                type: string
-                default: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image"
-            templateName:
-                required: true
-                type: string
-                default: "helloImageTemplateforSIG.json"
-            sigResourceGroup:
-                required: true
-                type: string
-            imageDefName:
-                required: true
-                type: string
-            sigName:
-                required: true
-                type: string
-            location:
-                required: true
-                type: string
-            additionalregion:
-                required: true
-                type: string
-            runOutputName:
-                required: true
-                type: string
+            templateFolder: { required: true, type: string }
+            templateName: { required: true, type: string }
+            sigResourceGroup: { required: true, type: string }
+            imageDefName: { required: true, type: string }
+            sigName: { required: true, type: string }
+            location: { required: true, type: string }
+            additionalregion: { required: true, type: string }
+            runOutputName: { required: true, type: string }
         secrets:
             AZURE_CLIENT_ID:
                 required: true
@@ -38,10 +20,14 @@ on:
                 required: true
 
 permissions:
-    contents: read
-    id-token: write
-    actions: read
-    security-events: write
+  contents: write      
+  id-token: write
+  actions: read
+  security-events: write
+
+concurrency:
+  group: "semverbot-release"
+  cancel-in-progress: false
 
 env:
     SEMVERBOT_VERSION: "1.0.0"
@@ -49,10 +35,14 @@ env:
 jobs:
     BUILD-CUSTOM-IMAGE:
         runs-on: ubuntu-latest
+        outputs:
+            release_version: ${{ steps.set_version.outputs.release_version }}
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
-
+              with:
+                fetch-depth: 0
+          
             - name: Login with Azure OIDC
               uses: azure/login@v1
               with:
@@ -61,6 +51,7 @@ jobs:
                 subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
             - name: Install semverbot
+              id: install_semverbot
               shell: bash
               run: |
                     mkdir -p "$HOME/bin"
@@ -73,13 +64,20 @@ jobs:
                     # echo "<sha256>  $HOME/bin/sbot" | sha256sum -c -
 
             - name: Compute version bump
+              id: set_version
               shell: bash
               run: |
                     sbot update version
-                    echo "CURRENT_VERSION=$(sbot get version)"   >> "$GITHUB_ENV"
-                    echo "RELEASE_VERSION=$(sbot predict version)" >> "$GITHUB_ENV"
-                    echo "Current: $CURRENT_VERSION"
-                    echo "Next:    $RELEASE_VERSION"
+                    current=$(sbot get version)
+                    next=$(sbot predict version)
+
+                    echo "Current version: $current"
+                    echo "Next version:    $next"
+
+                    # expose to later steps & as job output
+                    echo "CURRENT_VERSION=$current" >> "$GITHUB_ENV"
+                    echo "RELEASE_VERSION=$next"   >> "$GITHUB_ENV"
+                    echo "release_version=$next"   >> "$GITHUB_OUTPUT"
 
             - name: Download and configure image template
               shell: bash
