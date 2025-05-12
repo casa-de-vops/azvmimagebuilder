@@ -3,23 +3,21 @@ name: Resolve Image Builder Template
 on:
   workflow_call:
     inputs:
-      templateFolder:   { required: true, type: string }
-      templateName:     { required: true, type: string }
+      templateFolder: { required: true, type: string }
+      templateName: { required: true, type: string }
       sigResourceGroup: { required: true, type: string }
-      imageDefName:     { required: true, type: string }
-      sigName:          { required: true, type: string }
-      location:         { required: true, type: string }
+      imageDefName: { required: true, type: string }
+      sigName: { required: true, type: string }
+      location: { required: true, type: string }
       additionalregion: { required: true, type: string }
-      runOutputName:    { required: true, type: string }
+      runOutputName: { required: true, type: string }
     secrets:
       AZURE_SUBSCRIPTION_ID: { required: true }
 
     outputs:
       resolved_path:
-        description: "Relative path to the fully‑parametrised template"
         value: ${{ jobs.resolve.outputs.resolved_path }}
       img_template_name:
-        description: "runOutputName‑release_version"
         value: ${{ jobs.resolve.outputs.img_template_name }}
       release_version:
         value: ${{ jobs.resolve.outputs.release_version }}
@@ -31,17 +29,17 @@ jobs:
       SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     outputs:
-      resolved_path:     ${{ steps.outvars.outputs.resolved_path }}
+      resolved_path: ${{ steps.outvars.outputs.resolved_path }}
       img_template_name: ${{ steps.outvars.outputs.img_template_name }}
-      release_version:   ${{ steps.outvars.outputs.release_version }}
+      release_version: ${{ steps.outvars.outputs.release_version }}
 
     steps:
-      # 1️⃣  Checkout
+      # 1️⃣ Checkout repo (template lives in repo)
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # 2️⃣  Show the inputs (easier debugging)
+      # 2️⃣ Echo inputs for quick debugging
       - name: Echo inputs
         shell: bash
         run: |
@@ -54,7 +52,7 @@ jobs:
           echo "Replica region  : ${{ inputs.additionalregion }}"
           echo "Run output name : ${{ inputs.runOutputName }}"
 
-      # 3️⃣  Generate a timestamp‑based version
+      # 3️⃣ Generate timestamp‑based version
       - name: Generate version
         id: ver
         shell: bash
@@ -62,31 +60,26 @@ jobs:
           set -euo pipefail
           VERSION=$(date +%Y%m%d%H%M%S)
           echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Using release_version=$VERSION"
 
-      # 4️⃣  Sanity‑check the source template
+      # 4️⃣ Verify the source template exists
       - name: Verify template exists
         shell: bash
         run: |
-          set -euo pipefail
           SRC="templates/${{ inputs.templateFolder }}/${{ inputs.templateName }}"
-          if [[ ! -f "$SRC" ]]; then
-            echo "::error::Template not found: $SRC"
-            exit 1
-          fi
+          [[ -f "$SRC" ]] || { echo "::error::Template not found: $SRC"; exit 1; }
 
-      # 5️⃣  Replace tokens
+      # 5️⃣ Token replacement
       - name: Replace placeholders
         id: templ
         shell: bash
         env:
-          RG:         ${{ inputs.sigResourceGroup }}
-          IMG_DEF:    ${{ inputs.imageDefName }}
-          SIG_NAME:   ${{ inputs.sigName }}
-          REGION1:    ${{ inputs.location }}
-          REGION2:    ${{ inputs.additionalregion }}
-          RUN_OUT:    ${{ inputs.runOutputName }}
-          VERSION:    ${{ steps.ver.outputs.release_version }}
+          RG: ${{ inputs.sigResourceGroup }}
+          IMG_DEF: ${{ inputs.imageDefName }}
+          SIG_NAME: ${{ inputs.sigName }}
+          REGION1: ${{ inputs.location }}
+          REGION2: ${{ inputs.additionalregion }}
+          RUN_OUT: ${{ inputs.runOutputName }}
+          VERSION: ${{ steps.ver.outputs.release_version }}
         run: |
           set -euo pipefail
           SRC="templates/${{ inputs.templateFolder }}/${{ inputs.templateName }}"
@@ -104,23 +97,24 @@ jobs:
           sed -i -e "s|<runOutputName>|${RUN_OUT}|g"        "$TARGET"
           sed -i -e "s%<imgBuilderId>%${IMG_BUILDER_ID}%g"  "$TARGET"
 
+          # 👇 **declare the output** so later steps pick up the exact filename
           echo "resolved_path=$TARGET" >> "$GITHUB_OUTPUT"
 
-      # 6️⃣  Expose outputs for downstream tasks
+      # 6️⃣ Collect job‑level outputs
       - name: Set composite outputs
         id: outvars
         shell: bash
         env:
-          RES:   ${{ steps.templ.outputs.resolved_path }}
-          RUN:   ${{ inputs.runOutputName }}
-          VER:   ${{ steps.ver.outputs.release_version }}
+          RES: ${{ steps.templ.outputs.resolved_path }}
+          RUN: ${{ inputs.runOutputName }}
+          VER: ${{ steps.ver.outputs.release_version }}
         run: |
-          echo "resolved_path=${RES}"             >> "$GITHUB_OUTPUT"
-          echo "img_template_name=${RUN}-${VER}"   >> "$GITHUB_OUTPUT"
-          echo "release_version=${VER}"            >> "$GITHUB_OUTPUT"
+          echo "resolved_path=${RES}"           >> "$GITHUB_OUTPUT"
+          echo "img_template_name=${RUN}-${VER}" >> "$GITHUB_OUTPUT"
+          echo "release_version=${VER}"          >> "$GITHUB_OUTPUT"
 
-      # 7️⃣  Upload the resolved template
-      - name: Upload artifact
+      # 7️⃣ Upload the resolved template as an artifact
+      - name: Upload resolved template
         uses: actions/upload-artifact@v4
         with:
           name: resolved-image-template
