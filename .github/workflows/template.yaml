@@ -11,6 +11,10 @@ on:
       location: { required: true, type: string }
       additionalregion: { required: true, type: string }
       runOutputName: { required: true, type: string }
+      versionBump: # <-- new input
+        required: true
+        type: string
+        description: "Version bump type: major, minor, or patch"
     secrets:
       AZURE_CLIENT_ID:
         required: true
@@ -57,8 +61,8 @@ jobs:
           mkdir -p "$HOME/bin"
           echo "$HOME/bin" >> "$GITHUB_PATH"
           curl -sL \
-              -o "$HOME/bin/sbot" \
-              "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
+                  -o "$HOME/bin/sbot" \
+                  "https://github.com/restechnica/semverbot/releases/download/v${SEMVERBOT_VERSION}/sbot-linux-amd64"
           chmod +x "$HOME/bin/sbot"
           # (optional) verify checksum – insert sha256sum here if you wish
           # echo "<sha256>  $HOME/bin/sbot" | sha256sum -c -
@@ -66,10 +70,17 @@ jobs:
       - name: Compute version bump
         id: set_version
         shell: bash
+        env:
+          VERSION_BUMP: ${{ inputs.versionBump }}
         run: |
-          sbot update version
+          if [[ "$VERSION_BUMP" != "major" && "$VERSION_BUMP" != "minor" && "$VERSION_BUMP" != "patch" ]]; then
+              echo "Invalid version bump type: $VERSION_BUMP"
+              exit 1
+          fi
+
+          sbot update version --bump $VERSION_BUMP
           current=$(sbot get version)
-          next=$(sbot predict version)
+          next=$(sbot get version)
 
           echo "Current version: $current"
           echo "Next version:    $next"
@@ -120,17 +131,17 @@ jobs:
           IMAGE_TEMPLATE_NAME="${{ inputs.templateName }}-${RELEASE_VERSION}"
 
           az resource create \
-              --resource-group $sigResourceGroup \
-              --properties @${{ inputs.templateName }} \
-              --is-full-object \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME"
+                  --resource-group $sigResourceGroup \
+                  --properties @${{ inputs.templateName }} \
+                  --is-full-object \
+                  --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+                  -n "$IMAGE_TEMPLATE_NAME"
 
           az resource invoke-action \
-              --resource-group $sigResourceGroup \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME" \
-              --action Run
+                  --resource-group $sigResourceGroup \
+                  --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+                  -n "$IMAGE_TEMPLATE_NAME" \
+                  --action Run
 
       - name: Release and push version tag
         shell: bash

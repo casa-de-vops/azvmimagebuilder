@@ -1,8 +1,17 @@
 name: create_custom_vm_image
 on:
+  workflow_dispatch:
+    inputs:
+      versionBump:
+        required: true
+        type: choice
+        description: "Version bump type: major, minor, or patch"
+        options:
+          - major
+          - minor
+          - patch
   push:
     branches: ["main"] # release branch
-  workflow_dispatch: # manual
 
 permissions:
   contents: write
@@ -25,4 +34,5 @@ jobs:
       location: "westus2"
       additionalregion: "eastus2"
       runOutputName: "GoldenImage"
+      versionBump: ${{ github.event.inputs.versionBump || 'patch' }}
     secrets: inherit
