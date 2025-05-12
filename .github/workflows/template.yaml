@@ -179,7 +179,7 @@ jobs:
           $templateParams = @{
               "imageTemplateName" = $imageTemplateName
               "svclocation"       = $env:location
-              "api-version"       = "2019-05-01-preview"   # parameter name contains a dash
+              "api-version"       = "2019-05-01-preview"
           }
 
           # ── Submit (validate + stage) the template ────────────────────────────
