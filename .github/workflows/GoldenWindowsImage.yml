@@ -1,10 +1,13 @@
-name: WindowsImage Build and Distribution
+name: GoldenWindowsImage Build and Distribution
 description: |
   This workflow builds and distributes a custom VM image using the Azure Image Builder service.
   It uses a template to create a shared image gallery image and distribute it across regions.
 on:
   push:
     branches: ["main"] # release branch
+    paths:
+      - templates/1_Creating_a_Custom_Win_Shared_Image_Gallery_Image/GoldenWindowsImage.json # Path to the JSON template file
+      - .github/workflows/GoldenWindowsImage.yml # Path to this workflow file
   workflow_dispatch: # manual
 
 permissions:
