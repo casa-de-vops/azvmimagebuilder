@@ -4,17 +4,17 @@ on:
   workflow_call:
     inputs:
       # Path to the resolved template uploaded by the resolve task
-      resolved_path:     { required: true, type: string }
+      resolved_path: { required: true, type: string }
       # Resource group where AIB resources will live (needed for validation scope)
-      sigResourceGroup:  { required: true, type: string }
+      sigResourceGroup: { required: true, type: string }
       # Unique name the resolve task produced, e.g. GoldenWindows‑20250512…
-      imgTemplateName:   { required: true, type: string }
+      imgTemplateName: { required: true, type: string }
       # Primary location (parameter 'svclocation' in your template)
-      location:          { required: true, type: string }
+      location: { required: true, type: string }
     secrets:
       AZURE_SUBSCRIPTION_ID: { required: true }
-      AZURE_CLIENT_ID:       { required: true }
-      AZURE_TENANT_ID:       { required: true }
+      AZURE_CLIENT_ID: { required: true }
+      AZURE_TENANT_ID: { required: true }
 
     outputs:
       validated:
@@ -24,35 +24,25 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-
-    outputs:
-      validated: ${{ steps.setoutput.outputs.ok }}
-
     steps:
-      # 1️⃣ Checkout (needed only if template lives in repo)
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
 
-      # 2️⃣ Login to Azure (OIDC)
+      # ⬇︎ download the template produced by resolve
+      - name: Download resolved template
+        uses: actions/download-artifact@v4
+        with:
+          name: resolved-image-template
+          path: .
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
-          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # 3️⃣ Show what we’re about to validate
-      - name: Echo validation context
-        shell: bash
-        run: |
-          echo "Template path : ${{ inputs.resolved_path }}"
-          echo "SIG RG        : ${{ inputs.sigResourceGroup }}"
-          echo "Template name : ${{ inputs.imgTemplateName }}"
-          echo "Location      : ${{ inputs.location }}"
-
-      # 4️⃣ Run ARM validation
-      - name: Validate ARM template
+      - name: Validate template
         shell: bash
         run: |
           set -euo pipefail
@@ -65,9 +55,4 @@ jobs:
             --only-show-errors
           echo "Template validation ✅"
 
-      # 5️⃣ Expose success flag for downstream jobs
-      - name: Set success output
-        id: setoutput
-        if: success()
-        shell: bash
-        run: echo "ok=true" >> "$GITHUB_OUTPUT"
+      # expose success output as before …
