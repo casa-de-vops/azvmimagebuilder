@@ -28,8 +28,8 @@ on:
       AZURE_SUBSCRIPTION_ID: { required: true }
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -177,9 +177,9 @@ jobs:
 
           # ── Build the parameter object expected by your template ──────────────
           $templateParams = @{
-              "imageTemplateName" = $imageTemplateName
-              "svclocation"       = $env:location
-              "api-version"       = "2019-05-01-preview"
+            "imageTemplateName" = $imageTemplateName
+            "svclocation"       = $env:location
+            "api-version"       = "2019-05-01-preview"
           }
 
           # ── Submit (validate + stage) the template ────────────────────────────
@@ -197,3 +197,19 @@ jobs:
           -ApiVersion        '2019-05-01-preview' `
           -Action            Run `
           -Force
+
+          ### Query the Image Template for Current or Last Run Status and Image Template Settings
+          $managementEp = $currentAzureContext.Environment.ResourceManagerUrl
+
+          $urlBuildStatus = [System.String]::Format("{0}subscriptions/{1}/resourceGroups/$imageResourceGroup/providers/Microsoft.VirtualMachineImages/imageTemplates/{2}?api-version=2019-05-01-preview", $managementEp, $currentAzureContext.Subscription.Id, $imageTemplateName)
+
+          $buildStatusResult = Invoke-WebRequest -Method GET -Uri $urlBuildStatus -UseBasicParsing -Headers @{ "Authorization" = ("Bearer " + $accessToken) } -ContentType application/json 
+          $buildJsonStatus = $buildStatusResult.Content
+          Write-Host $buildJsonStatus
+
+          ### Query the Distribution properties
+          $urlRunOutputStatus = [System.String]::Format("{0}subscriptions/{1}/resourceGroups/$imageResourceGroup/providers/Microsoft.VirtualMachineImages/imageTemplates/$imageTemplateName/runOutputs/{2}?api-version=2019-05-01-preview", $managementEp, $currentAzureContext.Subscription.Id, $env:runOutputName)
+
+          $runOutStatusResult = Invoke-WebRequest -Method GET -Uri $urlRunOutputStatus -UseBasicParsing -Headers @{ "Authorization" = ("Bearer " + $accessToken) } -ContentType application/json 
+          $runOutJsonStatus = $runOutStatusResult.Content
+          Write-Host $runOutJsonStatus
