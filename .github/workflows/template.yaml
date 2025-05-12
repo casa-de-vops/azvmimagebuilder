@@ -72,7 +72,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
-      # ── Version = run‑number‑shortSHA  (fixed) ──────────────────
+      # ── Version = run‑number‑shortSHA ───────────────────────────
       - name: Set version
         id: set_version
         shell: bash
@@ -141,15 +141,21 @@ jobs:
           $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
           $imageTemplate  = "${env:RUN_OUTPUT}-$releaseVersion"
 
+          # --- Build the parameter object expected by your template ---
+          $templateParams = @{
+              imageTemplateName = $imageTemplate
+              svclocation       = $env:PRIMARY_REGION
+              api-version       = '2022-07-01'   # <-- Option A: pass the missing parameter
+          }
+
+          # Submit the template
           New-AzResourceGroupDeployment `
             -ResourceGroupName  $env:SIG_RG `
             -TemplateFile       $env:TEMPLATE_FILE `
             -Name               "it-$imageTemplate" `
-            -TemplateParameterObject @{
-                imageTemplateName = $imageTemplate
-                svclocation       = $env:PRIMARY_REGION
-              }
+            -TemplateParameterObject $templateParams
 
+          # Invoke build
           Invoke-AzResourceAction `
             -ResourceGroupName $env:SIG_RG `
             -Name              $imageTemplate `
@@ -158,6 +164,7 @@ jobs:
             -ApiVersion        '2022-07-01' `
             -Force
 
+          # Poll every minute (30 min max) for completion
           for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep 60
             $status = (Get-AzImageBuilderTemplate -ResourceGroupName $env:SIG_RG -Name $imageTemplate).LastRunStatus
