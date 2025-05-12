@@ -1,0 +1,68 @@
+name: Build image (Linux)
+description: Submit Azure Image Builder template and wait for completion
+inputs:
+  resolved_path: { required: true }
+  sigResourceGroup: { required: true }
+  imgTemplateName: { required: true }
+  runOutputName: { required: true }
+  location: { required: true }
+  buildTimeoutMins: { required: true }
+runs:
+  using: composite
+  steps:
+    # 0. Login
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ env.AZURE_CLIENT_ID }}
+        tenant-id: ${{ env.AZURE_TENANT_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+    # 1. Ensure CLI extension
+    - run: az extension add --name image-builder --upgrade
+
+    # 2. Submit & start
+    - run: |
+        az resource create \
+          --resource-group "${{ inputs.sigResourceGroup }}" \
+          --properties @"${{ inputs.resolved_path }}" \
+          --is-full-object \
+          --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+          --name "${{ inputs.imgTemplateName }}"
+
+        az resource invoke-action \
+          --resource-group "${{ inputs.sigResourceGroup }}" \
+          --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+          --name "${{ inputs.imgTemplateName }}" \
+          --action Run
+        echo "Build started"
+
+    # 3. Poll
+    - id: wait
+      run: |
+        set -euo pipefail
+        MAX=$(( ${{ inputs.buildTimeoutMins }} * 60 / 30 ))
+        for i in $(seq 1 "$MAX"); do
+          sleep 30
+          STATE=$(az resource show \
+            --resource-group "${{ inputs.sigResourceGroup }}" \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --name "${{ inputs.imgTemplateName }}" \
+            --query 'properties.lastRunStatus.runState' -o tsv)
+          echo "[$(date +%T)] runState=$STATE"
+          if [[ "$STATE" == "Succeeded" || "$STATE" == "Failed" ]]; then
+            echo "state=$STATE" >> "$GITHUB_OUTPUT"
+            break
+          fi
+        done
+        [[ "$STATE" == "Succeeded" ]] || {
+          echo "::error::Image build failed (state=$STATE)";
+          exit 1;
+        }
+
+    # 4. expose output
+    - name: Set composite output
+      run: echo "run_state=${{ steps.wait.outputs.state }}" >> "$GITHUB_OUTPUT"
+outputs:
+  run_state:
+    value: ${{ steps.wait.outputs.state }}

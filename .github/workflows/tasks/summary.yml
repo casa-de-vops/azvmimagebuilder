@@ -1,0 +1,39 @@
+# .github/workflows/tasks/summary.yml
+name: Summarise AIB Run
+on:
+  workflow_call:
+    inputs:
+      imgTemplateName:   { required: true, type: string }
+      releaseVersion:    { required: true, type: string }
+      buildOS:           { required: true, type: string }
+      runOutputName:     { required: true, type: string }
+      overallStatus:
+        description: "success | failure (pass ${{ job.status }} from dispatcher)"
+        required: true
+        type: string
+    secrets: {}
+
+jobs:
+  summary:
+    runs-on: ubuntu-latest
+    steps:
+      # optional: grab the resolved template so you can attach a link in the summary
+      - name: Download resolved template
+        uses: actions/download-artifact@v4
+        with:
+          name: resolved-image-template
+          path: ./template
+
+      - name: Write Markdown summary
+        shell: bash
+        run: |
+          echo "### Azure Image Builder run summary"        >> "$GITHUB_STEP_SUMMARY"
+          echo "*Template*        : **${{ inputs.imgTemplateName }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Run output name* : **${{ inputs.runOutputName }}**"   >> "$GITHUB_STEP_SUMMARY"
+          echo "*Release version* : **${{ inputs.releaseVersion }}**"  >> "$GITHUB_STEP_SUMMARY"
+          echo "*Runner OS*       : **${{ inputs.buildOS }}**"         >> "$GITHUB_STEP_SUMMARY"
+          echo "*Status*          : $([[ '${{ inputs.overallStatus }}' == 'success' ]] && echo ✅ || echo ❌)" \
+              >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "You can download the fully‑resolved template from the **Artifacts** pane ↑." \
+              >> "$GITHUB_STEP_SUMMARY"
