@@ -94,7 +94,7 @@ jobs:
                     imgBuilderId: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/rai-identity"
 
               run: |
-                    cp templates/${{ inputs.templateName }} ${{ inputs.templateName }}
+                    cp templates/${{ inputs.templateFolder }}/${{ inputs.templateName }} ${{ inputs.templateName }}
 
                     sed -i -e "s/<subscriptionID>/$subscriptionID/g" ${{ inputs.templateName }}
                     sed -i -e "s/<rgName>/$sigResourceGroup/g" ${{ inputs.templateName }}
