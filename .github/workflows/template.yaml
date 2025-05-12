@@ -99,7 +99,7 @@ jobs:
           sed -i -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
 
       - name: Upload resolved template
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: resolved-image-template
           path: ${{ env.TEMPLATE_FILE }}
