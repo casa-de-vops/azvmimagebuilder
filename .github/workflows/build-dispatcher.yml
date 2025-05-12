@@ -1,0 +1,68 @@
+on:
+    workflow_call:
+      inputs:
+        templateFolder: { required: true, type: string }
+        templateName: { required: true, type: string }
+        sigResourceGroup: { required: true, type: string }
+        imageDefName: { required: true, type: string }
+        sigName: { required: true, type: string }
+        location: { required: true, type: string }
+        additionalregion: { required: true, type: string }
+        runOutputName: { required: true, type: string }
+        buildOS:
+          description: "Target OS for the image (linux | windows)"
+          type: string
+          default: "linux"
+          required: true
+      secrets:
+        AZURE_CLIENT_ID: { required: true }
+        AZURE_TENANT_ID: { required: true }
+        AZURE_SUBSCRIPTION_ID: { required: true }
+  
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+  
+permissions:
+    contents: write
+    id-token: write
+    actions: read
+    security-events: write
+  
+jobs:
+  resolve:
+    uses: ./.github/workflows/tasks/resolve.yml
+    with:
+      templateFolder:   ${{ inputs.templateFolder }}
+      templateName:     ${{ inputs.templateName }}
+      sigResourceGroup: ${{ inputs.sigResourceGroup }}
+      imageDefName:     ${{ inputs.imageDefName }}
+      sigName:          ${{ inputs.sigName }}
+      location:         ${{ inputs.location }}
+      additionalregion: ${{ inputs.additionalregion }}
+      runOutputName:    ${{ inputs.runOutputName }}
+    secrets: inherit
+
+  validate:
+    needs: resolve
+    uses: ./.github/workflows/tasks/validate.yml
+    with:
+      resolved_path:    ${{ needs.resolve.outputs.resolved_path }}
+      sigResourceGroup: ${{ inputs.sigResourceGroup }}
+      imgTemplateName:  ${{ needs.resolve.outputs.img_template_name }}
+      location:         ${{ inputs.location }}
+    secrets: inherit
+
+#   build:
+#     needs: validate
+#     uses: >-
+#       ./.github/workflows/tasks/${{ inputs.buildOS == 'windows' &&
+#                                    'build-windows.yml' || 'build-linux.yml' }}
+#     with: ${{ inputs }}
+#     secrets: inherit
+
+#   summary:
+#     needs: build
+#     uses: ./.github/workflows/tasks/summary.yml
+#     with: ${{ inputs }}
+#     secrets: inherit

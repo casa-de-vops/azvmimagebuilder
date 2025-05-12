@@ -1,0 +1,73 @@
+# .github/workflows/tasks/validate.yml
+name: Validate Image Builder Template
+on:
+  workflow_call:
+    inputs:
+      # Path to the resolved template uploaded by the resolve task
+      resolved_path:     { required: true, type: string }
+      # Resource group where AIB resources will live (needed for validation scope)
+      sigResourceGroup:  { required: true, type: string }
+      # Unique name the resolve task produced, e.g. GoldenWindows‑20250512…
+      imgTemplateName:   { required: true, type: string }
+      # Primary location (parameter 'svclocation' in your template)
+      location:          { required: true, type: string }
+    secrets:
+      AZURE_SUBSCRIPTION_ID: { required: true }
+      AZURE_CLIENT_ID:       { required: true }
+      AZURE_TENANT_ID:       { required: true }
+
+    outputs:
+      validated:
+        description: "always 'true' if this job succeeded"
+        value: ${{ jobs.validate.outputs.validated }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    outputs:
+      validated: ${{ steps.setoutput.outputs.ok }}
+
+    steps:
+      # 1️⃣ Checkout (needed only if template lives in repo)
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2️⃣ Login to Azure (OIDC)
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # 3️⃣ Show what we’re about to validate
+      - name: Echo validation context
+        shell: bash
+        run: |
+          echo "Template path : ${{ inputs.resolved_path }}"
+          echo "SIG RG        : ${{ inputs.sigResourceGroup }}"
+          echo "Template name : ${{ inputs.imgTemplateName }}"
+          echo "Location      : ${{ inputs.location }}"
+
+      # 4️⃣ Run ARM validation
+      - name: Validate ARM template
+        shell: bash
+        run: |
+          set -euo pipefail
+          az deployment group validate \
+            --resource-group "${{ inputs.sigResourceGroup }}" \
+            --template-file  "${{ inputs.resolved_path }}" \
+            --parameters     imageTemplateName="${{ inputs.imgTemplateName }}" \
+                             svclocation="${{ inputs.location }}" \
+                             api-version='2022-07-01' \
+            --only-show-errors
+          echo "Template validation ✅"
+
+      # 5️⃣ Expose success flag for downstream jobs
+      - name: Set success output
+        id: setoutput
+        if: success()
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
