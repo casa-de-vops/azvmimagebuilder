@@ -51,6 +51,7 @@ jobs:
       sigResourceGroup: ${{ inputs.sigResourceGroup }}
       imgTemplateName: ${{ needs.resolve.outputs.img_template_name }}
       location: ${{ inputs.location }}
+      buildOS: ${{ inputs.buildOS }}
     secrets: inherit
 
   # build:
