@@ -30,15 +30,6 @@
     "customize": [
       {
         "type": "Shell",
-        "name": "cudaInstall",
-        "inline": [
-          "sudo apt-get update",
-          "curl -sL https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -",
-          "sudo apt-get install -y nvidia-driver-535 cuda-toolkit-12-4"
-        ]
-      },
-      {
-        "type": "Shell",
         "name": "enableAMA",
         "inline": [
           "wget https://aka.ms/InstallAzureMonitorLinuxAgent && chmod +x InstallAzureMonitorLinuxAgent",
