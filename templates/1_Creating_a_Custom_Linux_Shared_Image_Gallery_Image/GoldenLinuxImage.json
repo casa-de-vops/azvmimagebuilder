@@ -27,16 +27,7 @@
       "version": "latest"
     },
 
-    
     "customize": [
-      {
-        "type": "Shell",
-        "name": "enableAMA",
-        "inline": [
-          "wget https://aka.ms/InstallAzureMonitorLinuxAgent && chmod +x InstallAzureMonitorLinuxAgent",
-          "sudo ./InstallAzureMonitorLinuxAgent"
-        ]
-      },
       {
         "type": "Shell",
         "name": "RunScriptFromSource",

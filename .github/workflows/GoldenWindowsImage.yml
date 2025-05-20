@@ -31,6 +31,7 @@ jobs:
       sigResourceGroup: "rg-connectivity-prod-westus2-example-001" # Azure resource group for the Shared Image Gallery resources
       imageDefName: "GoldenWindowsImage" # Name for the Image Definition in the gallery
       sigName: "appImageGallery" # Name of the Shared Image Gallery
+      uaiIdentityName: "rai-identity"
       location: "westus2" # Primary region for building the image
       additionalregion: "eastus2" # Additional region for image replication
       runOutputName: "GoldenWindowsImage" # Identifier used for the build output
