@@ -27,6 +27,20 @@ resource "azurerm_shared_image" "linux" {
   }
 }
 
+resource "azurerm_shared_image" "rhel" {
+  name                = "GoldenRHELImage"
+  gallery_name        = azurerm_shared_image_gallery.this.name
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  os_type             = "Linux"
+
+  identifier {
+    publisher = "RedHat"
+    offer     = "RHEL"
+    sku       = "94_gen2"
+  }
+}
+
 resource "azurerm_shared_image" "windows" {
   name                = "GoldenWindowsImage"
   gallery_name        = azurerm_shared_image_gallery.this.name

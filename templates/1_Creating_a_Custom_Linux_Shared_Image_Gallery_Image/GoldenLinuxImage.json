@@ -21,12 +21,13 @@
     },
     "source": {
       "type": "PlatformImage",
-      "publisher": "RedHat",
-      "offer": "RHEL",
-      "sku": "94_gen2",
+      "publisher": "Canonical",
+      "offer": "UbuntuServer",
+      "sku": "18.04-LTS",
       "version": "latest"
     },
 
+    
     "customize": [
       {
         "type": "Shell",
