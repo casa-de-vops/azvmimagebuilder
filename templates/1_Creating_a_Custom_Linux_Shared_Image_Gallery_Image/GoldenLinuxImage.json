@@ -38,12 +38,6 @@
       },
       {
         "type": "Shell",
-        "name": "cisBaseline",
-        "scriptUri": "https://raw.githubusercontent.com/yourorg/hardening/cis_ubuntu_22_L1.sh",
-        "sha256Checksum": "<checksum>"
-      },
-      {
-        "type": "Shell",
         "name": "enableAMA",
         "inline": [
           "wget https://aka.ms/InstallAzureMonitorLinuxAgent && chmod +x InstallAzureMonitorLinuxAgent",
