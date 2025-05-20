@@ -39,7 +39,7 @@ permissions:
   security-events: write
 
 jobs:
-  BUILD-PREPARE-IMAGE:
+  BUILD-CUSTOM-IMAGE:
     runs-on: 'windows-latest'
 
     env:
@@ -106,82 +106,13 @@ jobs:
           name: resolved-image-template
           path: ${{ env.TEMPLATE_FILE }}
 
-      # ── Validate Template ─────────────────────────────────────
-      - name: Validate Image Template
-        if: inputs.templateType == 'imageTemplate'
-        shell: bash
-        run: |
-          set -euo pipefail
-          RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
-          IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
-          
-          # Validate the image template using validation API
-          echo "Validating Image Template: $IMAGE_TEMPLATE_NAME"
-          az resource validate \
-          --resource-group $SIG_RG \
-          --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-          --properties @"${{ inputs.templateName }}" \
-          --is-full-object \
-          --name "$IMAGE_TEMPLATE_NAME"
-            
-          echo "Image Template validation successful"
-              
-      - name: Validate ARM Template
-        if: inputs.templateType == 'armTemplate'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          
-          $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
-          $imageTemplate = "${{ inputs.runOutputName }}-$releaseVersion"
-          
-          # Build the parameter object expected by your template
-          $templateParams = @{
-          imageTemplateName = $imageTemplate
-          svclocation       = $env:PRIMARY_REGION
-          'api-version'     = '2022-07-01'
-          }
-          
-          # Validate the ARM template without deploying
-          Write-Host "Validating ARM template: $env:TEMPLATE_FILE"
-          Test-AzResourceGroupDeployment `
-          -ResourceGroupName $env:SIG_RG `
-          -TemplateFile $env:TEMPLATE_FILE `
-          -TemplateParameterObject $templateParams
-          
-          Write-Host "ARM Template validation successful"
-
-  DEPLOY-CUSTOM-IMAGE:
-    needs: BUILD-PREPARE-IMAGE
-    runs-on: 'windows-latest'
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release')
-
-    env:
-      SIG_RG: ${{ inputs.sigResourceGroup }}
-      PRIMARY_REGION: ${{ inputs.location }}
-      TEMPLATE_FILE: ${{ inputs.templateName }}
-      RELEASE_VERSION: ${{ needs.BUILD-PREPARE-IMAGE.outputs.release_version }}
-
-    steps:
-      - name: Download resolved template
-        uses: actions/download-artifact@v4
-        with:
-          name: resolved-image-template
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          enable-AzPSSession: true
-
       # ── Image Template build path ────────────────────────────────────────
       - name: Build & distribute image (Image Template)
         if: inputs.templateType == 'imageTemplate'
         shell: bash
         run: |
           set -euo pipefail
+          RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
           IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
 
           az resource create \
@@ -209,14 +140,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $releaseVersion = '${{ needs.BUILD-PREPARE-IMAGE.outputs.release_version }}'
+          $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
           $imageTemplate  = "${{ inputs.runOutputName }}-$releaseVersion"
 
           # --- Build the parameter object expected by your template ---
           $templateParams = @{
               imageTemplateName = $imageTemplate
               svclocation       = $env:PRIMARY_REGION
-              'api-version'     = '2022-07-01'
+              'api-version'       = '2022-07-01'
           }
 
           # Submit the template
@@ -254,4 +185,4 @@ jobs:
         shell: bash
         run: |
           echo "### Azure Image Builder output" >> "$GITHUB_STEP_SUMMARY"
-          echo "*${{ inputs.templateType }}:* **${{ inputs.runOutputName }}-${{ env.RELEASE_VERSION }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "*${{ inputs.templateType }}:* **${{ inputs.runOutputName }}-${{ steps.set_version.outputs.release_version }}**" >> "$GITHUB_STEP_SUMMARY"
