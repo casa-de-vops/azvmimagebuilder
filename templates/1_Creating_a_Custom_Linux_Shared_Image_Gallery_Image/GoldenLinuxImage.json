@@ -4,89 +4,94 @@
   "location": "<region1>",
   "dependsOn": [],
   "tags": {
-      "imagebuilderTemplate": "AzureImageBuilderSIG",
-      "userIdentity": "enabled"
-          },
-      "identity": {
-          "type": "UserAssigned",
-                  "userAssignedIdentities": {
-                  "<imgBuilderId>": {}
-                      
-              }
-              },
-  
+    "imagebuilderTemplate": "AzureImageBuilderSIG",
+    "userIdentity": "enabled"
+  },
+  "identity": {
+    "type": "UserAssigned",
+    "userAssignedIdentities": {
+      "<imgBuilderId>": {}
+    }
+  },
   "properties": {
-
-      "buildTimeoutInMinutes" : 80,
-
-      "vmProfile": 
-          {
-          "vmSize": "Standard_D1_v2",
-          "osDiskSizeGB": 50
-          },
-      
-      "source": {
-          "type": "PlatformImage",
-              "publisher": "Canonical",
-              "offer": "UbuntuServer",
-              "sku": "18.04-LTS",
-              "version": "latest"
-          
+    "buildTimeoutInMinutes": 80,
+    "vmProfile": {
+      "vmSize": "Standard_D1_v2",
+      "osDiskSizeGB": 50
+    },
+    "source": {
+      "type": "PlatformImage",
+      "publisher": "Canonical",
+      "offer": "UbuntuServer",
+      "sku": "18.04-LTS",
+      "version": "latest"
+    },
+    "customize": [
+      {
+        "type": "Shell",
+        "name": "cudaInstall",
+        "inline": [
+          "sudo apt-get update",
+          "curl -sL https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -",
+          "sudo apt-get install -y nvidia-driver-535 cuda-toolkit-12-4"
+        ]
       },
-      "customize": [
-          {
-              "type": "Shell",
-              "name": "RunScriptFromSource",
-              "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript.sh"
-          },
-
-          {
-              "type": "Shell",
-              "name": "CheckSumCompareShellScript",
-              "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript2.sh",
-              "sha256Checksum": "ade4c5214c3c675e92c66e2d067a870c5b81b9844b3de3cc72c49ff36425fc93"
-          },
-      
-          
-          {
-              "type": "File",
-              "name": "downloadBuildArtifacts",
-              "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
-              "destination":"/tmp/index.html"
-          },
-
-          {
-              "type": "Shell",
-              "name": "setupBuildPath",
-              "inline": [
-                  "sudo mkdir /buildArtifacts",
-                  "sudo cp /tmp/index.html /buildArtifacts/index.html"
-              ]
-          },
-
-          {
-              "type": "Shell",
-              "name": "InstallUpgrades",
-              "inline": [
-                  "sudo apt install unattended-upgrades"
-              ]
-          }
-      ],
-      "distribute": 
-      [
-          {   
-              "type": "SharedImage",
-              "galleryImageId": "/subscriptions/<subscriptionID>/resourceGroups/<rgName>/providers/Microsoft.Compute/galleries/<sharedImageGalName>/images/<imageDefName>",
-              "runOutputName": "<runOutputName>",
-              "artifactTags": {
-                  "source": "azureVmImageBuilder",
-                  "baseosimg": "ubuntu1804"
-              },
-              "replicationRegions": [
-                "<region1>",
-                "<region2>"
-              ]
-          }
-      ]
+      {
+        "type": "Shell",
+        "name": "cisBaseline",
+        "scriptUri": "https://raw.githubusercontent.com/yourorg/hardening/cis_ubuntu_22_L1.sh",
+        "sha256Checksum": "<checksum>"
+      },
+      {
+        "type": "Shell",
+        "name": "enableAMA",
+        "inline": [
+          "wget https://aka.ms/InstallAzureMonitorLinuxAgent && chmod +x InstallAzureMonitorLinuxAgent",
+          "sudo ./InstallAzureMonitorLinuxAgent"
+        ]
+      },
+      {
+        "type": "Shell",
+        "name": "RunScriptFromSource",
+        "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript.sh"
+      },
+      {
+        "type": "Shell",
+        "name": "CheckSumCompareShellScript",
+        "scriptUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/customizeScript2.sh",
+        "sha256Checksum": "ade4c5214c3c675e92c66e2d067a870c5b81b9844b3de3cc72c49ff36425fc93"
+      },
+      {
+        "type": "File",
+        "name": "downloadBuildArtifacts",
+        "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
+        "destination": "/tmp/index.html"
+      },
+      {
+        "type": "Shell",
+        "name": "setupBuildPath",
+        "inline": [
+          "sudo mkdir /buildArtifacts",
+          "sudo cp /tmp/index.html /buildArtifacts/index.html"
+        ]
+      },
+      {
+        "type": "Shell",
+        "name": "InstallUpgrades",
+        "inline": ["sudo apt install unattended-upgrades"]
+      }
+    ],
+    "distribute": [
+      {
+        "type": "SharedImage",
+        "galleryImageId": "/subscriptions/<subscriptionID>/resourceGroups/<rgName>/providers/Microsoft.Compute/galleries/<sharedImageGalName>/images/<imageDefName>",
+        "runOutputName": "<runOutputName>",
+        "artifactTags": {
+          "source": "azureVmImageBuilder",
+          "baseosimg": "ubuntu1804"
+        },
+        "replicationRegions": ["<region1>", "<region2>"]
+      }
+    ]
   }
 }
