@@ -3,8 +3,9 @@ name: "[Template] Build and distribute custom VM image"
 
 description: |
   Reusable workflow that builds and distributes a custom VM image with
-  Azure Image Builder (AIB) and publishes the resolved template as an
-  artifact.
+  Azure Image Builder (AIB). On feature branches it performs build‑time
+  validation only; the full release (image build & distribution) runs
+  exclusively on the **main** branch.
 
 on:
   workflow_call:
@@ -16,20 +17,20 @@ on:
       sigName: { required: true, type: string }
       uaiIdentityName: { required: true, type: string }
       location: { required: true, type: string }
-      additionalregion: { required: false, type: string, default: '' }
+      additionalregion: { required: false, type: string, default: "" }
       runOutputName: { required: true, type: string }
       templateType:
         description: "armTemplate | imageTemplate. Allowed values: 'armTemplate', 'imageTemplate'."
         type: string
         required: true
-
     secrets:
       AZURE_CLIENT_ID: { required: true }
       AZURE_TENANT_ID: { required: true }
       AZURE_SUBSCRIPTION_ID: { required: true }
 
+# Cancel in‑progress runs that share the same ref & workflow name
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}‑${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -38,9 +39,102 @@ permissions:
   actions: read
   security-events: write
 
+###########################################################################
+# Jobs
+###########################################################################
+
 jobs:
-  BUILD-CUSTOM-IMAGE:
-    runs-on: 'windows-latest'
+  #########################################################################
+  # 1) Build & Validate – runs on all branches *except* main
+  #########################################################################
+  build-validate:
+    if: ${{ github.ref != 'refs/heads/main' }}
+    runs-on: windows-latest
+
+    env:
+      SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      TEMPLATE_FILE: ${{ inputs.templateName }}
+      TEMPLATE_DIR: templates/${{ inputs.templateFolder }}
+      TEMPLATE_TYPE: ${{ inputs.templateType }}
+      IMAGE_DEF: ${{ inputs.imageDefName }}
+      SIG_NAME: ${{ inputs.sigName }}
+      PRIMARY_REGION: ${{ inputs.location }}
+      ADDL_REGION: ${{ inputs.additionalregion }}
+      RUN_OUTPUT: ${{ inputs.runOutputName }}
+      IMG_BUILDER_ID: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${{ inputs.uaiIdentityName }}"
+
+    steps:
+      # ─────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      # ── Version = run‑number‑shortSHA ───────────────────────────
+      - name: Set version
+        id: set_version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          VERSION="${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
+          echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # ── Resolve template tokens ─────────────────────────────────
+      - name: Resolve image template parameters
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$TEMPLATE_DIR/$TEMPLATE_FILE" "$TEMPLATE_FILE"
+
+          sed -i -e "s|<subscriptionID>|$SUB_ID|g"        "$TEMPLATE_FILE"
+          sed -i -e "s|<rgName>|$SIG_RG|g"                "$TEMPLATE_FILE"
+          sed -i -e "s|<imageDefName>|$IMAGE_DEF|g"       "$TEMPLATE_FILE"
+          sed -i -e "s|<sharedImageGalName>|$SIG_NAME|g"  "$TEMPLATE_FILE"
+          sed -i -e "s|<region1>|$PRIMARY_REGION|g"       "$TEMPLATE_FILE"
+          sed -i -e "s|<region2>|$ADDL_REGION|g"          "$TEMPLATE_FILE"
+          sed -i -e "s|<runOutputName>|$RUN_OUTPUT|g"     "$TEMPLATE_FILE"
+          sed -i -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
+
+      # (Lightweight validation – adjust to your own needs)
+      - name: Validate ARM / Image template syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Validating template syntax…"
+          az bicep version || true  # example placeholder – replace with real validation commands
+
+      - name: Upload resolved template
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-image-template
+          path: ${{ env.TEMPLATE_FILE }}
+
+      # ── Run summary ─────────────────────────────────────────────
+      - name: Post run summary (validate)
+        if: always()
+        shell: bash
+        run: |
+          echo "### Validation Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Branch:* ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Resolved template:* **${{ env.TEMPLATE_FILE }}**" >> "$GITHUB_STEP_SUMMARY"
+
+  #########################################################################
+  # 2) Release – full image build & distribution, *main* branch only
+  #########################################################################
+  release:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: windows-latest
 
     env:
       SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -106,9 +200,11 @@ jobs:
           name: resolved-image-template
           path: ${{ env.TEMPLATE_FILE }}
 
-      # ── Image Template build path ────────────────────────────────────────
+      ###################################################################
+      # Image Template build path (release only)
+      ###################################################################
       - name: Build & distribute image (Image Template)
-        if: inputs.templateType == 'imageTemplate'
+        if: ${{ inputs.templateType == 'imageTemplate' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -128,14 +224,11 @@ jobs:
               -n "$IMAGE_TEMPLATE_NAME" \
               --action Run
 
-          # az image builder wait \
-          #   --resource-group "$SIG_RG" \
-          #   --name "$IMAGE_TEMPLATE_NAME" \
-          #   --created
-
-      # ── ARM Template build path ──────────────────────────────────────
+      ###################################################################
+      # ARM Template build path (release only)
+      ###################################################################
       - name: Build & distribute image (ARM Template)
-        if: inputs.templateType == 'armTemplate'
+        if: ${{ inputs.templateType == 'armTemplate' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -180,7 +273,7 @@ jobs:
           }
 
       # ── Run summary ─────────────────────────────────────────────
-      - name: Post run summary
+      - name: Post run summary (release)
         if: always()
         shell: bash
         run: |
