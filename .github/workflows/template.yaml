@@ -39,7 +39,7 @@ permissions:
   security-events: write
 
 jobs:
-  BUILD-CUSTOM-IMAGE:
+  PREPARE-IMAGE-TEMPLATE:
     runs-on: "windows-latest"
 
     env:
@@ -57,6 +57,7 @@ jobs:
 
     outputs:
       release_version: ${{ steps.set_version.outputs.release_version }}
+      image_template_name: ${{ steps.set_version.outputs.image_template_name }}
 
     steps:
       # ─────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ jobs:
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           VERSION="${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
           echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image_template_name=${{ inputs.runOutputName }}-${VERSION}" >> "$GITHUB_OUTPUT"
 
       # ── Resolve template tokens ─────────────────────────────────
       - name: Resolve image template parameters
@@ -106,61 +108,87 @@ jobs:
           name: resolved-image-template
           path: ${{ env.TEMPLATE_FILE }}
 
-      # ── Image Template build path ────────────────────────────────────────
-      - name: Build & distribute image (Image Template)
-        if: inputs.templateType == 'imageTemplate' && github.ref == 'refs/heads/main'
+      # ── Submit Image Template ────────────────────────────────────────
+      - name: Submit Image Template
+        if: github.ref == 'refs/heads/main'
+        id: submit_template
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
-          IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
+          IMAGE_TEMPLATE_NAME="${{ steps.set_version.outputs.image_template_name }}"
+          
+          if [[ "${{ inputs.templateType }}" == "imageTemplate" ]]; then
+            az resource create \
+              --resource-group $SIG_RG \
+              --properties @"${{ inputs.templateName }}" \
+              --is-full-object \
+              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+              -n "$IMAGE_TEMPLATE_NAME"
+          elif [[ "${{ inputs.templateType }}" == "armTemplate" ]]; then
+            # Use PowerShell to deploy ARM template
+            pwsh -Command "
+              `$ErrorActionPreference = 'Stop'
+              `$templateParams = @{
+                imageTemplateName = '$IMAGE_TEMPLATE_NAME'
+                svclocation       = '$PRIMARY_REGION'
+                'api-version'     = '2022-07-01'
+              }
+              New-AzResourceGroupDeployment `
+                -ResourceGroupName  '$SIG_RG' `
+                -TemplateFile       '$TEMPLATE_FILE' `
+                -Name               'it-$IMAGE_TEMPLATE_NAME' `
+                -TemplateParameterObject `$templateParams
+            "
+          else
+            echo "Invalid template type specified"
+            exit 1
+          fi
+          echo "Template submitted successfully"
 
-          az resource create \
-            --resource-group $SIG_RG \
-            --properties @"${{ inputs.templateName }}" \
-            --is-full-object \
-            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-            -n "$IMAGE_TEMPLATE_NAME"
+  BUILD-DISTRIBUTE-IMAGE:
+    needs: PREPARE-IMAGE-TEMPLATE
+    runs-on: "windows-latest"
+    if: github.ref == 'refs/heads/main'
+    
+    env:
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      TEMPLATE_TYPE: ${{ inputs.templateType }}
+      IMAGE_TEMPLATE_NAME: ${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name }}
 
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      # ── Run Image Build ────────────────────────────────────────
+      - name: Build Image (Image Template)
+        if: inputs.templateType == 'imageTemplate'
+        shell: bash
+        run: |
+          set -euo pipefail
+          
           az resource invoke-action \
             --resource-group $SIG_RG \
             --resource-type Microsoft.VirtualMachineImages/imageTemplates \
             -n "$IMAGE_TEMPLATE_NAME" \
             --action Run
+          
+          echo "Image build started. This may take 30+ minutes to complete."
 
-          # az image builder wait \
-          #   --resource-group "$SIG_RG" \
-          #   --name "$IMAGE_TEMPLATE_NAME" \
-          #   --created
-
-      # ── ARM Template build path ──────────────────────────────────────
-      - name: Build & distribute image (ARM Template)
-        if: inputs.templateType == 'armTemplate' && github.ref == 'refs/heads/main'
+      - name: Build Image (ARM Template)
+        if: inputs.templateType == 'armTemplate'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
-          $imageTemplate  = "${{ inputs.runOutputName }}-$releaseVersion"
-
-          # --- Build the parameter object expected by your template ---
-          $templateParams = @{
-            imageTemplateName = $imageTemplate
-            svclocation       = $env:PRIMARY_REGION
-            'api-version'       = '2022-07-01'
-          }
-
-          # Submit the template
-          New-AzResourceGroupDeployment `
-            -ResourceGroupName  $env:SIG_RG `
-            -TemplateFile       $env:TEMPLATE_FILE `
-            -Name               "it-$imageTemplate" `
-            -TemplateParameterObject $templateParams
-
           # Invoke build
           Invoke-AzResourceAction `
             -ResourceGroupName $env:SIG_RG `
-            -Name              $imageTemplate `
+            -Name              $env:IMAGE_TEMPLATE_NAME `
             -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
             -Action            Run `
             -ApiVersion        '2022-07-01' `
@@ -172,7 +200,7 @@ jobs:
             $res = Get-AzResource `
               -ResourceGroupName $env:SIG_RG `
               -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
-              -Name              $imageTemplate
+              -Name              $env:IMAGE_TEMPLATE_NAME
             $status = $res.Properties.lastRunStatus
             Write-Host ("{0} → {1}" -f $status.runState, $status.runSubState)
             if ($status.runState -eq 'Succeeded') { break }
@@ -186,4 +214,4 @@ jobs:
         shell: bash
         run: |
           echo "### Azure Image Builder output" >> "$GITHUB_STEP_SUMMARY"
-          echo "*${{ inputs.templateType }}:* **${{ inputs.runOutputName }}-${{ steps.set_version.outputs.release_version }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "*${{ inputs.templateType }}:* **${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name }}**" >> "$GITHUB_STEP_SUMMARY"
