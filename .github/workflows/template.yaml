@@ -1,4 +1,3 @@
-
 # .github/workflows/template.yaml
 name: "[TEMPLATE] AIB – Build & Publish VM Image"
 
@@ -73,9 +72,25 @@ jobs:
       - name: Token replace
         run: |
           cp "$TEMPLATE_DIR/$TEMPLATE_FILE" "$TEMPLATE_FILE"
-          sed -i -e "s|<subscriptionID>|$SUB_ID|g"                  -e "s|<rgName>|$SIG_RG|g"                  -e "s|<imageDefName>|$IMAGE_DEF|g"                  -e "s|<sharedImageGalName>|$SIG_NAME|g"                  -e "s|<region1>|$PRIMARY_REGION|g"                  -e "s|<region2>|$ADDL_REGION|g"                  -e "s|<runOutputName>|$RUN_OUTPUT|g"                  -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
+          sed -i -e "s|<subscriptionID>|$SUB_ID|g" \
+                 -e "s|<rgName>|$SIG_RG|g" \
+                 -e "s|<imageDefName>|$IMAGE_DEF|g" \
+                 -e "s|<sharedImageGalName>|$SIG_NAME|g" \
+                 -e "s|<region1>|$PRIMARY_REGION|g" \
+                 -e "s|<region2>|$ADDL_REGION|g" \
+                 -e "s|<runOutputName>|$RUN_OUTPUT|g" \
+                 -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
 
-      - name: Validate ARM/Bicep syntax
+      - name: Validate ARM template
+        if: env.TEMPLATE_TYPE == 'armTemplate'
+        run: |
+          az deployment group validate \
+            --resource-group $SIG_RG \
+            --template-file "$TEMPLATE_FILE" \
+            --mode Incremental
+
+      - name: Validate image template
+        if: env.TEMPLATE_TYPE == 'imageTemplate'
         run: az bicep build --file "$TEMPLATE_FILE" --stdout >/dev/null
 
       - name: Upload resolved template
@@ -106,15 +121,38 @@ jobs:
       - name: Token replace (dev identifiers)
         run: |
           cp "$TEMPLATE_DIR/$TEMPLATE_FILE" "$TEMPLATE_FILE"
-          sed -i -e "s|<subscriptionID>|$SUB_ID|g"                  -e "s|<rgName>|$SIG_RG|g"                  -e "s|<imageDefName>|${IMAGE_DEF}-dev|g"                  -e "s|<sharedImageGalName>|${SIG_NAME}-dev|g"                  -e "s|<region1>|$PRIMARY_REGION|g"                  -e "s|<region2>|$ADDL_REGION|g"                  -e "s|<runOutputName>|${RUN_OUTPUT}-dev|g"                  -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
+          sed -i -e "s|<subscriptionID>|$SUB_ID|g" \
+                 -e "s|<rgName>|$SIG_RG|g" \
+                 -e "s|<imageDefName>|${IMAGE_DEF}-dev|g" \
+                 -e "s|<sharedImageGalName>|${SIG_NAME}-dev|g" \
+                 -e "s|<region1>|$PRIMARY_REGION|g" \
+                 -e "s|<region2>|$ADDL_REGION|g" \
+                 -e "s|<runOutputName>|${RUN_OUTPUT}-dev|g" \
+                 -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
 
-      - name: Build image (imageTemplate only)
+      - name: Deploy ARM template (dev)
+        if: env.TEMPLATE_TYPE == 'armTemplate'
+        run: |
+          VER="dev-${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
+          az deployment group create \
+            --resource-group $SIG_RG \
+            --template-file "$TEMPLATE_FILE" \
+            --name "aib-dev-deploy-$VER" \
+            --mode Incremental
+
+      - name: Build image (imageTemplate)
         if: env.TEMPLATE_TYPE == 'imageTemplate'
         run: |
           VER="dev-${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
           IT_NAME="${RUN_OUTPUT}-dev-${VER}"
-          az resource create --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME"             --properties @"$TEMPLATE_FILE"             --is-full-object
-          az resource invoke-action --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME" --action Run
+          az resource create --resource-group $SIG_RG \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --name "$IT_NAME" \
+            --properties @"$TEMPLATE_FILE" \
+            --is-full-object
+          az resource invoke-action --resource-group $SIG_RG \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --name "$IT_NAME" --action Run
 
   #################################################################
   # Release build – main branch
@@ -138,12 +176,35 @@ jobs:
       - name: Token replace
         run: |
           cp "$TEMPLATE_DIR/$TEMPLATE_FILE" "$TEMPLATE_FILE"
-          sed -i -e "s|<subscriptionID>|$SUB_ID|g"                  -e "s|<rgName>|$SIG_RG|g"                  -e "s|<imageDefName>|$IMAGE_DEF|g"                  -e "s|<sharedImageGalName>|$SIG_NAME|g"                  -e "s|<region1>|$PRIMARY_REGION|g"                  -e "s|<region2>|$ADDL_REGION|g"                  -e "s|<runOutputName>|$RUN_OUTPUT|g"                  -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
+          sed -i -e "s|<subscriptionID>|$SUB_ID|g" \
+                 -e "s|<rgName>|$SIG_RG|g" \
+                 -e "s|<imageDefName>|$IMAGE_DEF|g" \
+                 -e "s|<sharedImageGalName>|$SIG_NAME|g" \
+                 -e "s|<region1>|$PRIMARY_REGION|g" \
+                 -e "s|<region2>|$ADDL_REGION|g" \
+                 -e "s|<runOutputName>|$RUN_OUTPUT|g" \
+                 -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
+
+      - name: Deploy ARM template
+        if: env.TEMPLATE_TYPE == 'armTemplate'
+        run: |
+          VER="${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
+          az deployment group create \
+            --resource-group $SIG_RG \
+            --template-file "$TEMPLATE_FILE" \
+            --name "aib-production-deploy-$VER" \
+            --mode Incremental
 
       - name: Build & distribute (imageTemplate)
         if: env.TEMPLATE_TYPE == 'imageTemplate'
         run: |
           VER="${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
           IT_NAME="${RUN_OUTPUT}-${VER}"
-          az resource create --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME"             --properties @"$TEMPLATE_FILE"             --is-full-object
-          az resource invoke-action --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME" --action Run
+          az resource create --resource-group $SIG_RG \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --name "$IT_NAME" \
+            --properties @"$TEMPLATE_FILE" \
+            --is-full-object
+          az resource invoke-action --resource-group $SIG_RG \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --name "$IT_NAME" --action Run
