@@ -79,24 +79,62 @@ jobs:
                  -e "s|<region1>|$PRIMARY_REGION|g" \
                  -e "s|<region2>|$ADDL_REGION|g" \
                  -e "s|<runOutputName>|$RUN_OUTPUT|g" \
-                 -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
-
-      - name: Validate ARM template
+                 -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"      - name: Validate ARM template
         if: env.TEMPLATE_TYPE == 'armTemplate'
         run: |
           az deployment group validate \
             --resource-group $SIG_RG \
             --template-file "$TEMPLATE_FILE" \
-            --mode Incremental
-
-      - name: Validate image template
+            --mode Incremental      - name: Validate image template
         if: env.TEMPLATE_TYPE == 'imageTemplate'
         run: |
-          # Validate the JSON template with Azure Image Builder
-          az deployment sub validate \
-            --location $PRIMARY_REGION \
-            --template-file "$TEMPLATE_FILE" \
-            --name "validation-$TEMPLATE_FILE"
+          # First validate JSON syntax
+          echo "Validating JSON syntax..."
+          cat "$TEMPLATE_FILE" | jq . >/dev/null || {
+            echo "❌ Invalid JSON syntax in template file!"
+            exit 1
+          }
+          echo "✅ JSON syntax is valid"
+          
+          # Then validate Image Builder template structure
+          echo "Validating Image Builder template structure..."
+          TYPE=$(jq -r '.type // empty' "$TEMPLATE_FILE")
+          if [[ "$TYPE" != "Microsoft.VirtualMachineImages/imageTemplates" ]]; then
+            echo "❌ Template type must be 'Microsoft.VirtualMachineImages/imageTemplates', found: '$TYPE'"
+            exit 1
+          fi
+          
+          # Check for required properties
+          jq -e '.properties.source' "$TEMPLATE_FILE" >/dev/null || {
+            echo "❌ Missing required 'properties.source' section in template!"
+            exit 1
+          }
+          
+          jq -e '.properties.customize' "$TEMPLATE_FILE" >/dev/null || {
+            echo "❌ Missing required 'properties.customize' section in template!"
+            exit 1
+          }
+          
+          jq -e '.properties.distribute' "$TEMPLATE_FILE" >/dev/null || {
+            echo "❌ Missing required 'properties.distribute' section in template!"
+            exit 1
+          }
+          
+          # Validate source type
+          SOURCE_TYPE=$(jq -r '.properties.source.type // empty' "$TEMPLATE_FILE")
+          if [[ -z "$SOURCE_TYPE" ]]; then
+            echo "❌ Missing required 'properties.source.type' property!"
+            exit 1
+          fi
+          
+          # Validate distribute array is not empty
+          DIST_COUNT=$(jq '.properties.distribute | length' "$TEMPLATE_FILE")
+          if [[ "$DIST_COUNT" -lt 1 ]]; then
+            echo "❌ The 'properties.distribute' array must contain at least one item!"
+            exit 1
+          fi
+          
+          echo "✅ Image Builder template structure is valid"
 
       - name: Upload resolved template
         uses: actions/upload-artifact@v4
