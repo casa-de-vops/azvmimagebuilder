@@ -1,281 +1,149 @@
-# .github/workflows/template.yaml
-name: "[Template] Build and distribute custom VM image"
 
-description: |
-  Reusable workflow that builds and distributes a custom VM image with
-  Azure Image Builder (AIB). On feature branches it performs build‑time
-  validation only; the full release (image build & distribution) runs
-  exclusively on the **main** branch.
+# .github/workflows/template.yaml
+name: "[TEMPLATE] AIB – Build & Publish VM Image"
 
 on:
   workflow_call:
     inputs:
-      templateFolder: { required: true, type: string }
-      templateName: { required: true, type: string }
-      sigResourceGroup: { required: true, type: string }
-      imageDefName: { required: true, type: string }
-      sigName: { required: true, type: string }
-      uaiIdentityName: { required: true, type: string }
-      location: { required: true, type: string }
-      additionalregion: { required: false, type: string, default: "" }
-      runOutputName: { required: true, type: string }
-      templateType:
-        description: "armTemplate | imageTemplate. Allowed values: 'armTemplate', 'imageTemplate'."
-        type: string
-        required: true
+      templateFolder:      { type: string, required: true }
+      templateName:        { type: string, required: true }
+      sigResourceGroup:    { type: string, required: true }
+      imageDefName:        { type: string, required: true }
+      sigName:             { type: string, required: true }
+      uaiIdentityName:     { type: string, required: true }
+      location:            { type: string, required: true }
+      additionalregion:    { type: string, required: false, default: "" }
+      runOutputName:       { type: string, required: true }
+      templateType:        { type: string, required: true, description: "armTemplate | imageTemplate" }
     secrets:
-      AZURE_CLIENT_ID: { required: true }
-      AZURE_TENANT_ID: { required: true }
+      AZURE_CLIENT_ID:       { required: true }
+      AZURE_TENANT_ID:       { required: true }
       AZURE_SUBSCRIPTION_ID: { required: true }
 
-# Cancel in‑progress runs that share the same ref & workflow name
 concurrency:
-  group: ${{ github.workflow }}‑${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: write
   id-token: write
-  actions: read
-  security-events: write
 
-###########################################################################
+defaults:
+  run:
+    shell: bash
+
+env:
+  SUB_ID:          ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  SIG_RG:          ${{ inputs.sigResourceGroup }}
+  TEMPLATE_FILE:   ${{ inputs.templateName }}
+  TEMPLATE_DIR:    templates/${{ inputs.templateFolder }}
+  TEMPLATE_TYPE:   ${{ inputs.templateType }}
+  IMAGE_DEF:       ${{ inputs.imageDefName }}
+  SIG_NAME:        ${{ inputs.sigName }}
+  PRIMARY_REGION:  ${{ inputs.location }}
+  ADDL_REGION:     ${{ inputs.additionalregion }}
+  RUN_OUTPUT:      ${{ inputs.runOutputName }}
+  IMG_BUILDER_ID:  "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${{ inputs.uaiIdentityName }}"
+
+#################################################################
 # Jobs
-###########################################################################
-
+#################################################################
 jobs:
-  #########################################################################
-  # 1) Build & Validate – runs on all branches *except* main
-  #########################################################################
-  build-validate:
-    if: ${{ github.ref != 'refs/heads/main' }}
-    runs-on: windows-latest
-
-    env:
-      SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      SIG_RG: ${{ inputs.sigResourceGroup }}
-      TEMPLATE_FILE: ${{ inputs.templateName }}
-      TEMPLATE_DIR: templates/${{ inputs.templateFolder }}
-      TEMPLATE_TYPE: ${{ inputs.templateType }}
-      IMAGE_DEF: ${{ inputs.imageDefName }}
-      SIG_NAME: ${{ inputs.sigName }}
-      PRIMARY_REGION: ${{ inputs.location }}
-      ADDL_REGION: ${{ inputs.additionalregion }}
-      RUN_OUTPUT: ${{ inputs.runOutputName }}
-      IMG_BUILDER_ID: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${{ inputs.uaiIdentityName }}"
-
+  #################################################################
+  # Validation – runs on every push
+  #################################################################
+  validate:
+    name: Template validation
+    runs-on: ubuntu-latest
     steps:
-      # ─────────────────────────────────────────────────────────────
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, fetch-tags: true }
 
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          enable-AzPSSession: true
+          enable-AzPSSession: false
 
-      # ── Version = run‑number‑shortSHA ───────────────────────────
-      - name: Set version
-        id: set_version
-        shell: bash
-        run: |
-          set -euo pipefail
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          VERSION="${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
-          echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Compute version
+        id: version
+        run: echo "release=${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})" >> "$GITHUB_OUTPUT"
 
-      # ── Resolve template tokens ─────────────────────────────────
-      - name: Resolve image template parameters
-        shell: bash
+      - name: Token replace
         run: |
-          set -euo pipefail
           cp "$TEMPLATE_DIR/$TEMPLATE_FILE" "$TEMPLATE_FILE"
+          sed -i -e "s|<subscriptionID>|$SUB_ID|g"                  -e "s|<rgName>|$SIG_RG|g"                  -e "s|<imageDefName>|$IMAGE_DEF|g"                  -e "s|<sharedImageGalName>|$SIG_NAME|g"                  -e "s|<region1>|$PRIMARY_REGION|g"                  -e "s|<region2>|$ADDL_REGION|g"                  -e "s|<runOutputName>|$RUN_OUTPUT|g"                  -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
 
-          sed -i -e "s|<subscriptionID>|$SUB_ID|g"        "$TEMPLATE_FILE"
-          sed -i -e "s|<rgName>|$SIG_RG|g"                "$TEMPLATE_FILE"
-          sed -i -e "s|<imageDefName>|$IMAGE_DEF|g"       "$TEMPLATE_FILE"
-          sed -i -e "s|<sharedImageGalName>|$SIG_NAME|g"  "$TEMPLATE_FILE"
-          sed -i -e "s|<region1>|$PRIMARY_REGION|g"       "$TEMPLATE_FILE"
-          sed -i -e "s|<region2>|$ADDL_REGION|g"          "$TEMPLATE_FILE"
-          sed -i -e "s|<runOutputName>|$RUN_OUTPUT|g"     "$TEMPLATE_FILE"
-          sed -i -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
-
-      # (Lightweight validation – adjust to your own needs)
-      - name: Validate ARM / Image template syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Validating template syntax…"
-          az bicep version || true  # example placeholder – replace with real validation commands
+      - name: Validate ARM/Bicep syntax
+        run: az bicep build --file "$TEMPLATE_FILE" --stdout >/dev/null
 
       - name: Upload resolved template
         uses: actions/upload-artifact@v4
-        with:
-          name: resolved-image-template
+        with: 
+          name: resolved-template
           path: ${{ env.TEMPLATE_FILE }}
 
-      # ── Run summary ─────────────────────────────────────────────
-      - name: Post run summary (validate)
-        if: always()
-        shell: bash
-        run: |
-          echo "### Validation Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "*Branch:* ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "*Resolved template:* **${{ env.TEMPLATE_FILE }}**" >> "$GITHUB_STEP_SUMMARY"
+  #################################################################
+  # Dev build (feature/* or develop/*)
+  #################################################################
+  build-dev:
+    name: Dev image build
+    needs: validate
+    if: |
+      (startsWith(github.ref, 'refs/heads/feature/') || startsWith(github.ref, 'refs/heads/develop/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, fetch-tags: true }
 
-  #########################################################################
-  # 2) Release – full image build & distribution, *main* branch only
-  #########################################################################
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Token replace (dev identifiers)
+        run: |
+          cp "$TEMPLATE_DIR/$TEMPLATE_FILE" "$TEMPLATE_FILE"
+          sed -i -e "s|<subscriptionID>|$SUB_ID|g"                  -e "s|<rgName>|$SIG_RG|g"                  -e "s|<imageDefName>|${IMAGE_DEF}-dev|g"                  -e "s|<sharedImageGalName>|${SIG_NAME}-dev|g"                  -e "s|<region1>|$PRIMARY_REGION|g"                  -e "s|<region2>|$ADDL_REGION|g"                  -e "s|<runOutputName>|${RUN_OUTPUT}-dev|g"                  -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
+
+      - name: Build image (imageTemplate only)
+        if: env.TEMPLATE_TYPE == 'imageTemplate'
+        run: |
+          VER="dev-${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
+          IT_NAME="${RUN_OUTPUT}-dev-${VER}"
+          az resource create --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME"             --properties @"$TEMPLATE_FILE"             --is-full-object
+          az resource invoke-action --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME" --action Run
+
+  #################################################################
+  # Release build – main branch
+  #################################################################
   release:
-    if: ${{ github.ref == 'refs/heads/main' }}
-    runs-on: windows-latest
-
-    env:
-      SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      SIG_RG: ${{ inputs.sigResourceGroup }}
-      TEMPLATE_FILE: ${{ inputs.templateName }}
-      TEMPLATE_DIR: templates/${{ inputs.templateFolder }}
-      TEMPLATE_TYPE: ${{ inputs.templateType }}
-      IMAGE_DEF: ${{ inputs.imageDefName }}
-      SIG_NAME: ${{ inputs.sigName }}
-      PRIMARY_REGION: ${{ inputs.location }}
-      ADDL_REGION: ${{ inputs.additionalregion }}
-      RUN_OUTPUT: ${{ inputs.runOutputName }}
-      IMG_BUILDER_ID: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${{ inputs.uaiIdentityName }}"
-
-    outputs:
-      release_version: ${{ steps.set_version.outputs.release_version }}
-
+    name: Release build & publish
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     steps:
-      # ─────────────────────────────────────────────────────────────
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, fetch-tags: true }
 
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
-      # ── Version = run‑number‑shortSHA ───────────────────────────
-      - name: Set version
-        id: set_version
-        shell: bash
+      - name: Token replace
         run: |
-          set -euo pipefail
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          VERSION="${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
-          echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
-
-      # ── Resolve template tokens ─────────────────────────────────
-      - name: Resolve image template parameters
-        shell: bash
-        run: |
-          set -euo pipefail
           cp "$TEMPLATE_DIR/$TEMPLATE_FILE" "$TEMPLATE_FILE"
+          sed -i -e "s|<subscriptionID>|$SUB_ID|g"                  -e "s|<rgName>|$SIG_RG|g"                  -e "s|<imageDefName>|$IMAGE_DEF|g"                  -e "s|<sharedImageGalName>|$SIG_NAME|g"                  -e "s|<region1>|$PRIMARY_REGION|g"                  -e "s|<region2>|$ADDL_REGION|g"                  -e "s|<runOutputName>|$RUN_OUTPUT|g"                  -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
 
-          sed -i -e "s|<subscriptionID>|$SUB_ID|g"        "$TEMPLATE_FILE"
-          sed -i -e "s|<rgName>|$SIG_RG|g"                "$TEMPLATE_FILE"
-          sed -i -e "s|<imageDefName>|$IMAGE_DEF|g"       "$TEMPLATE_FILE"
-          sed -i -e "s|<sharedImageGalName>|$SIG_NAME|g"  "$TEMPLATE_FILE"
-          sed -i -e "s|<region1>|$PRIMARY_REGION|g"       "$TEMPLATE_FILE"
-          sed -i -e "s|<region2>|$ADDL_REGION|g"          "$TEMPLATE_FILE"
-          sed -i -e "s|<runOutputName>|$RUN_OUTPUT|g"     "$TEMPLATE_FILE"
-          sed -i -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
-
-      - name: Upload resolved template
-        uses: actions/upload-artifact@v4
-        with:
-          name: resolved-image-template
-          path: ${{ env.TEMPLATE_FILE }}
-
-      ###################################################################
-      # Image Template build path (release only)
-      ###################################################################
-      - name: Build & distribute image (Image Template)
-        if: ${{ inputs.templateType == 'imageTemplate' }}
-        shell: bash
+      - name: Build & distribute (imageTemplate)
+        if: env.TEMPLATE_TYPE == 'imageTemplate'
         run: |
-          set -euo pipefail
-          RELEASE_VERSION=${{ steps.set_version.outputs.release_version }}
-          IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
-
-          az resource create \
-              --resource-group $SIG_RG \
-              --properties @"${{ inputs.templateName }}" \
-              --is-full-object \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME"
-
-          az resource invoke-action \
-              --resource-group $SIG_RG \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME" \
-              --action Run
-
-      ###################################################################
-      # ARM Template build path (release only)
-      ###################################################################
-      - name: Build & distribute image (ARM Template)
-        if: ${{ inputs.templateType == 'armTemplate' }}
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-
-          $releaseVersion = '${{ steps.set_version.outputs.release_version }}'
-          $imageTemplate  = "${{ inputs.runOutputName }}-$releaseVersion"
-
-          # --- Build the parameter object expected by your template ---
-          $templateParams = @{
-              imageTemplateName = $imageTemplate
-              svclocation       = $env:PRIMARY_REGION
-              'api-version'       = '2022-07-01'
-          }
-
-          # Submit the template
-          New-AzResourceGroupDeployment `
-            -ResourceGroupName  $env:SIG_RG `
-            -TemplateFile       $env:TEMPLATE_FILE `
-            -Name               "it-$imageTemplate" `
-            -TemplateParameterObject $templateParams
-
-          # Invoke build
-          Invoke-AzResourceAction `
-            -ResourceGroupName $env:SIG_RG `
-            -Name              $imageTemplate `
-            -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
-            -Action            Run `
-            -ApiVersion        '2022-07-01' `
-            -Force
-
-          # Poll every minute (30 min max)
-          for ($i = 0; $i -lt 30; $i++) {
-            Start-Sleep 60
-            $res = Get-AzResource `
-                    -ResourceGroupName $env:SIG_RG `
-                    -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
-                    -Name              $imageTemplate
-            $status = $res.Properties.lastRunStatus
-            Write-Host ("{0} → {1}" -f $status.runState, $status.runSubState)
-            if ($status.runState -eq 'Succeeded') { break }
-            if ($status.runState -eq 'Failed')    { throw "Image build failed" }
-          }
-
-      # ── Run summary ─────────────────────────────────────────────
-      - name: Post run summary (release)
-        if: always()
-        shell: bash
-        run: |
-          echo "### Azure Image Builder output" >> "$GITHUB_STEP_SUMMARY"
-          echo "*${{ inputs.templateType }}:* **${{ inputs.runOutputName }}-${{ steps.set_version.outputs.release_version }}**" >> "$GITHUB_STEP_SUMMARY"
+          VER="${{ github.run_number }}-$(git rev-parse --short ${{ github.sha }})"
+          IT_NAME="${RUN_OUTPUT}-${VER}"
+          az resource create --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME"             --properties @"$TEMPLATE_FILE"             --is-full-object
+          az resource invoke-action --resource-group $SIG_RG             --resource-type Microsoft.VirtualMachineImages/imageTemplates             --name "$IT_NAME" --action Run
