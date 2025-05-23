@@ -96,8 +96,7 @@ jobs:
           az deployment sub validate \
             --location $PRIMARY_REGION \
             --template-file "$TEMPLATE_FILE" \
-            --name "validation-$TEMPLATE_FILE" \
-            --parameters resourceType=Microsoft.VirtualMachineImages/imageTemplates
+            --name "validation-$TEMPLATE_FILE"
 
       - name: Upload resolved template
         uses: actions/upload-artifact@v4
