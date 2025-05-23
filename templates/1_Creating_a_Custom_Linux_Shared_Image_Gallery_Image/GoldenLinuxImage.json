@@ -19,7 +19,7 @@
 
     "vmProfile": {
       "vmSize": "Standard_D1_v2",
-      "osDiskSizeGB": 30
+      "osDiskSizeGB": 50
     },
 
     "source": {
