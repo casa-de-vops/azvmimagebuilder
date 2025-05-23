@@ -124,26 +124,26 @@ jobs:
               --is-full-object \
               --resource-type Microsoft.VirtualMachineImages/imageTemplates \
               -n "$IMAGE_TEMPLATE_NAME"
-          elif [[ "${{ inputs.templateType }}" == "armTemplate" ]]; then
+              elif [[ "${{ inputs.templateType }}" == "armTemplate" ]]; then
             # Use PowerShell to deploy ARM template
             pwsh -Command "
-              `$ErrorActionPreference = 'Stop'
-              `$templateParams = @{
+              \$ErrorActionPreference = 'Stop'
+              \$templateParams = @{
                 imageTemplateName = '$IMAGE_TEMPLATE_NAME'
                 svclocation       = '$PRIMARY_REGION'
                 'api-version'     = '2022-07-01'
               }
-              New-AzResourceGroupDeployment `
-                -ResourceGroupName  '$SIG_RG' `
-                -TemplateFile       '$TEMPLATE_FILE' `
-                -Name               'it-$IMAGE_TEMPLATE_NAME' `
-                -TemplateParameterObject `$templateParams
+              New-AzResourceGroupDeployment \
+                -ResourceGroupName  '$SIG_RG' \
+                -TemplateFile       '$TEMPLATE_FILE' \
+                -Name               'it-$IMAGE_TEMPLATE_NAME' \
+                -TemplateParameterObject \$templateParams
             "
-          else
+              else
             echo "Invalid template type specified"
             exit 1
-          fi
-          echo "Template submitted successfully"
+              fi
+              echo "Template submitted successfully"
 
   BUILD-DISTRIBUTE-IMAGE:
     needs: PREPARE-IMAGE-TEMPLATE
