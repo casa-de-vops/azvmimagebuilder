@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   BUILD-CUSTOM-IMAGE:
-    runs-on: 'windows-latest'
+    runs-on: "windows-latest"
 
     env:
       SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -108,7 +108,7 @@ jobs:
 
       # ── Image Template build path ────────────────────────────────────────
       - name: Build & distribute image (Image Template)
-        if: inputs.templateType == 'imageTemplate'
+        if: inputs.templateType == 'imageTemplate' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -116,17 +116,17 @@ jobs:
           IMAGE_TEMPLATE_NAME="${{ inputs.runOutputName }}-${RELEASE_VERSION}"
 
           az resource create \
-              --resource-group $SIG_RG \
-              --properties @"${{ inputs.templateName }}" \
-              --is-full-object \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME"
+            --resource-group $SIG_RG \
+            --properties @"${{ inputs.templateName }}" \
+            --is-full-object \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            -n "$IMAGE_TEMPLATE_NAME"
 
           az resource invoke-action \
-              --resource-group $SIG_RG \
-              --resource-type Microsoft.VirtualMachineImages/imageTemplates \
-              -n "$IMAGE_TEMPLATE_NAME" \
-              --action Run
+            --resource-group $SIG_RG \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            -n "$IMAGE_TEMPLATE_NAME" \
+            --action Run
 
           # az image builder wait \
           #   --resource-group "$SIG_RG" \
@@ -135,7 +135,7 @@ jobs:
 
       # ── ARM Template build path ──────────────────────────────────────
       - name: Build & distribute image (ARM Template)
-        if: inputs.templateType == 'armTemplate'
+        if: inputs.templateType == 'armTemplate' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -145,9 +145,9 @@ jobs:
 
           # --- Build the parameter object expected by your template ---
           $templateParams = @{
-              imageTemplateName = $imageTemplate
-              svclocation       = $env:PRIMARY_REGION
-              'api-version'       = '2022-07-01'
+            imageTemplateName = $imageTemplate
+            svclocation       = $env:PRIMARY_REGION
+            'api-version'       = '2022-07-01'
           }
 
           # Submit the template
@@ -170,13 +170,14 @@ jobs:
           for ($i = 0; $i -lt 30; $i++) {
             Start-Sleep 60
             $res = Get-AzResource `
-                    -ResourceGroupName $env:SIG_RG `
-                    -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
-                    -Name              $imageTemplate
+              -ResourceGroupName $env:SIG_RG `
+              -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
+              -Name              $imageTemplate
             $status = $res.Properties.lastRunStatus
             Write-Host ("{0} → {1}" -f $status.runState, $status.runSubState)
             if ($status.runState -eq 'Succeeded') { break }
             if ($status.runState -eq 'Failed')    { throw "Image build failed" }
+            if ($status.runState -eq 'Canceled')  { throw "Image build canceled" }
           }
 
       # ── Run summary ─────────────────────────────────────────────
