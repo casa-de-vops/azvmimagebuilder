@@ -91,7 +91,12 @@ jobs:
 
       - name: Validate image template
         if: env.TEMPLATE_TYPE == 'imageTemplate'
-        run: az bicep build --file "$TEMPLATE_FILE" --stdout >/dev/null
+        run: |
+          # Validate the JSON template with Azure Image Builder
+          az resource validate \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            --properties @"$TEMPLATE_FILE" \
+            --is-full-object
 
       - name: Upload resolved template
         uses: actions/upload-artifact@v4
