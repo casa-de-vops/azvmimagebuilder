@@ -16,7 +16,7 @@
 
   "properties": {
     "buildTimeoutInMinutes": 80,
-
+    "stagingResourceGroup": "<buildRGName>",
     "vmProfile": {
       "vmSize": "Standard_D1_v2",
       "osDiskSizeGB": 50

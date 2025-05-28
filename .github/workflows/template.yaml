@@ -18,6 +18,7 @@ on:
       location: { required: true, type: string }
       additionalregion: { required: true, type: string }
       runOutputName: { required: true, type: string }
+      buildRGName: { required: false, type: string }
       templateType:
         description: "armTemplate | imageTemplate. Allowed values: 'armTemplate', 'imageTemplate'."
         type: string
@@ -53,6 +54,7 @@ jobs:
       PRIMARY_REGION: ${{ inputs.location }}
       ADDL_REGION: ${{ inputs.additionalregion }}
       RUN_OUTPUT: ${{ inputs.runOutputName }}
+      BUILD_RG: ${{ inputs.buildRGName }}
       IMG_BUILDER_ID: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${{ inputs.uaiIdentityName }}"
 
     outputs:
@@ -100,6 +102,7 @@ jobs:
           sed -i -e "s|<region1>|$PRIMARY_REGION|g"       "$TEMPLATE_FILE"
           sed -i -e "s|<region2>|$ADDL_REGION|g"          "$TEMPLATE_FILE"
           sed -i -e "s|<runOutputName>|$RUN_OUTPUT|g"     "$TEMPLATE_FILE"
+          sed -i -e "s|<buildRGName>|$BUILD_RG|g"         "$TEMPLATE_FILE"
           sed -i -e "s%<imgBuilderId>%$IMG_BUILDER_ID%g" "$TEMPLATE_FILE"
 
       - name: Upload resolved template

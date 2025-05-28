@@ -36,6 +36,7 @@
 
       "properties": {
         "buildTimeoutInMinutes": 100,
+        "stagingResourceGroup": "<buildRGName>",
 
         "vmProfile": {
           "vmSize": "Standard_D1_v2",

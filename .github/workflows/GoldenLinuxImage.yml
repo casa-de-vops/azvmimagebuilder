@@ -35,4 +35,5 @@ jobs:
       location: "westus2" # Primary region for building the image
       additionalregion: "eastus2" # Additional region for image replication
       runOutputName: "GoldenLinuxImage" # Identifier used for the build output
+      buildRGName: "rg-connectivity-prod-westus2-linux-001" # Resource group for the image build (optional, can be the same as sigResourceGroup)
     secrets: inherit
