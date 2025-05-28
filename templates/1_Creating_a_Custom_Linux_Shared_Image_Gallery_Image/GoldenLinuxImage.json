@@ -49,13 +49,6 @@
           "apt-get install -y snap && ",
           "snap install notepad-plus-plus'"
         ]
-      },
-      {
-        "type": "Reboot",
-        "name": "rebootVM",
-        "restartCommand": "shutdown -r now",
-        "restartCheckCommand": "uptime -p",
-        "restartTimeout": "5m"
       }
     ],
 
