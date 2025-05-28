@@ -1,6 +1,18 @@
 resource "azurerm_resource_group" "this" {
   name     = var.resource_group_name
-  location = "westus2"
+  location = var.location
+
+}
+
+resource "azurerm_resource_group" "linux" {
+  name     = var.linux_resource_group_name
+  location = var.location
+
+}
+
+resource "azurerm_resource_group" "windows" {
+  name     = var.windows_resource_group_name
+  location = var.location
 
 }
 

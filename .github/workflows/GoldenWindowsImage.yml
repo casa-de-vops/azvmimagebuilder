@@ -28,12 +28,12 @@ jobs:
       templateFolder: "1_Creating_a_Custom_Win_Shared_Image_Gallery_Image" # Folder containing the image template (located in the ./templates directory)
       templateName: "GoldenWindowsImage.json" # JSON template used for creating the custom VM image
       templateType: "armTemplate" # armTemplate or imageTemplate
-      sigResourceGroup: "rg-connectivity-prod-westus2-example-001" # Azure resource group for the Shared Image Gallery resources
+      sigResourceGroup: "rg-example-prod-westus2-imagebuilder-001" # Azure resource group for the Shared Image Gallery resources
       imageDefName: "GoldenWindowsImage" # Name for the Image Definition in the gallery
       sigName: "appImageGallery" # Name of the Shared Image Gallery
       uaiIdentityName: "rai-identity"
       location: "westus2" # Primary region for building the image
       additionalregion: "eastus2" # Additional region for image replication
       runOutputName: "GoldenWindowsImage" # Identifier used for the build output
-      buildRGName: "rg-connectivity-prod-westus2-windows-001" # Resource group for the image build (optional, can be the same as sigResourceGroup)
+      buildRGName: "rg-example-prod-westus2-windows-001" # Resource group for the image build (optional, can be the same as sigResourceGroup)
     secrets: inherit
