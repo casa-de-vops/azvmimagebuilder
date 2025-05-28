@@ -54,7 +54,7 @@ jobs:
       PRIMARY_REGION: ${{ inputs.location }}
       ADDL_REGION: ${{ inputs.additionalregion }}
       RUN_OUTPUT: ${{ inputs.runOutputName }}
-      BUILD_RG: ${{ inputs.buildRGName }}
+      BUILD_RG: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.buildRGName }}"
       IMG_BUILDER_ID: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${{ inputs.uaiIdentityName }}"
 
     outputs:
