@@ -16,7 +16,7 @@ on:
       sigName: { required: true, type: string }
       uaiIdentityName: { required: true, type: string }
       location: { required: true, type: string }
-      additionalregion: { required: true, type: string }
+      additionalregion: { required: false, type: string, default: '' }
       runOutputName: { required: true, type: string }
       buildRGName: { required: false, type: string }
       templateType:
