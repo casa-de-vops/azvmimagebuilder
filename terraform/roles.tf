@@ -38,3 +38,15 @@ resource "azurerm_role_assignment" "owner" {
   role_definition_name = "Owner"
   scope          = azurerm_resource_group.this.id
 }
+
+resource "azurerm_role_assignment" "linux_owner" {
+  principal_id   = azurerm_user_assigned_identity.this.principal_id
+  role_definition_name = "Owner"
+  scope          = azurerm_resource_group.linux.id
+}
+
+resource "azurerm_role_assignment" "windows_owner" {
+  principal_id   = azurerm_user_assigned_identity.this.principal_id
+  role_definition_name = "Owner"
+  scope          = azurerm_resource_group.windows.id
+}
