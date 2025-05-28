@@ -29,7 +29,6 @@
       "sku": "18.04-LTS",
       "version": "latest"
     },
-
     "customize": [
       {
         "type": "Shell",
@@ -40,6 +39,23 @@
           "apt-get update -y && ",
           "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unattended-upgrades'"
         ]
+      },
+      {
+        "type": "Shell",
+        "name": "Install-NotepadPlusPlus",
+        "inline": [
+          "sudo bash -c 'set -euo pipefail && ",
+          "apt-get update -y && ",
+          "apt-get install -y snap && ",
+          "snap install notepad-plus-plus'"
+        ]
+      },
+      {
+        "type": "Reboot",
+        "name": "rebootVM",
+        "restartCommand": "shutdown -r now",
+        "restartCheckCommand": "uptime -p",
+        "restartTimeout": "5m"
       }
     ],
 
