@@ -13,7 +13,6 @@
       "<imgBuilderId>": {}
     }
   },
-
   "properties": {
     "buildTimeoutInMinutes": 80,
 
@@ -21,7 +20,6 @@
       "vmSize": "Standard_D1_v2",
       "osDiskSizeGB": 30
     },
-
     "source": {
       "type": "PlatformImage",
       "publisher": "Canonical",
@@ -32,8 +30,14 @@
     "customize": [
       {
         "type": "Shell",
-        "name": "InstallUpgrades",
-        "inline": ["sudo apt install unattended-upgrades"]
+        "name": "PrepareAndInstallUnattendedUpgrades",
+        "inline": [
+          "set -euo pipefail",
+          "sudo apt-get clean",
+          "sudo rm -rf /var/lib/apt/lists/*",
+          "sudo apt-get update -y",
+          "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unattended-upgrades"
+        ]
       }
     ],
     "distribute": [
