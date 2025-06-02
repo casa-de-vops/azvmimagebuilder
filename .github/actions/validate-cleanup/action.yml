@@ -22,12 +22,14 @@ inputs:
     description: 'The Shared Image Gallery name'
   image-def-name:
     required: true
-    description: 'The image definition name'  validation-vm-name:
+    description: 'The image definition name'
+  validation-vm-name:
     required: true
     description: 'The name for the validation VM'
   validation-rg:
     required: true
-    description: 'The resource group for validation'  build-rg-name:
+    description: 'The resource group for validation'
+  build-rg-name:
     required: false
     description: 'The build resource group name, if specified will use this instead of creating a new validation RG'
     default: ''
@@ -38,7 +40,8 @@ inputs:
 
 runs:
   using: 'composite'
-  steps:    # ── Wait for image distribution to complete ──────────────────
+  steps:
+    # ── Wait for image distribution to complete ──────────────────
     - name: Wait for image distribution to complete
       if: inputs.skip-distribution-wait != 'true'
       shell: pwsh
@@ -85,7 +88,9 @@ runs:
           exit 1
         }
 
-        Write-Host "Image distribution completed successfully!"    # ── Create resource group for validation VM ─────────────────
+        Write-Host "Image distribution completed successfully!"
+
+    # ── Create resource group for validation VM ─────────────────
     - name: Create validation resource group
       shell: pwsh
       run: |
@@ -182,7 +187,9 @@ runs:
         Write-Output "### Validation Results" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "* Validation VM: **${{ inputs.validation-vm-name }}**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "* VM Status: **Running**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "* Validation Result: **✅ Success**" | Out-File -Append $env:GITHUB_STEP_SUMMARY    # ── Cleanup resources ─────────────────────────────────────
+        Write-Output "* Validation Result: **✅ Success**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+    # ── Cleanup resources ─────────────────────────────────────
     - name: Cleanup resources
       if: always()
       shell: pwsh
@@ -214,7 +221,8 @@ runs:
         } else {
           Write-Host "Keeping build resource group: ${{ inputs.validation-rg }} (as requested)"
         }
-          # Delete the image template if one was specified
+        
+        # Delete the image template if one was specified
         if (-not [string]::IsNullOrEmpty('${{ inputs.image-template-name }}')) {
           Write-Host "Deleting image template: ${{ inputs.image-template-name }}"
           Remove-AzResource `
