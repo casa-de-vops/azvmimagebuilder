@@ -92,7 +92,9 @@ runs:
     - name: Create validation resource group
       shell: pwsh
       run: |
-        $ErrorActionPreference = 'Stop'        # Check if we should use the build RG instead of creating a new one
+        $ErrorActionPreference = 'Stop'
+        
+        # Check if we should use the build RG instead of creating a new one
         if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
           Write-Host "Creating new validation resource group: ${{ inputs.validation-rg }}"
           New-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}" -Force
@@ -108,7 +110,9 @@ runs:
     - name: Deploy validation VM
       shell: pwsh
       run: |
-        $ErrorActionPreference = 'Stop'        # Get the latest image version
+        $ErrorActionPreference = 'Stop'
+        
+        # Get the latest image version
         $imageId = (Get-AzGalleryImageVersion -ResourceGroupName "${{ inputs.sig-resource-group }}" -GalleryName "${{ inputs.sig-name }}" -GalleryImageDefinitionName "${{ inputs.image-def-name }}" | 
           Sort-Object -Property PublishingProfile.PublishedDate -Descending | 
           Select-Object -First 1).Id
@@ -120,9 +124,10 @@ runs:
 
         Write-Host "Found image ID: $imageId"
 
-        # Generate a random password for the VM
-        $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
-        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force        # Deploy validation VM
+        # Generate a random password for the VM        $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
+        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
+        
+        # Deploy validation VM
         $vmParams = @{
           ResourceGroupName = "${{ inputs.validation-rg }}"
           Name = "${{ inputs.validation-vm-name }}"
@@ -136,11 +141,12 @@ runs:
         }
 
         Write-Host "Deploying validation VM..."
-        $vm = New-AzVM @vmParams
-
-        Write-Host "VM deployment completed. Waiting for VM to be ready..."
+        $vm = New-AzVM @vmParams        Write-Host "VM deployment completed. Waiting for VM to be ready..."
+        
         # Wait for VM to be ready
-        Start-Sleep -Seconds 60        # Check VM status
+        Start-Sleep -Seconds 60
+        
+        # Check VM status
         $vmStatus = (Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status).Statuses | 
           Where-Object { $_.Code -like "PowerState/*" } | 
           Select-Object -ExpandProperty DisplayStatus
@@ -158,7 +164,9 @@ runs:
     - name: Run validation tests
       shell: pwsh
       run: |
-        $ErrorActionPreference = 'Stop'        # We'll use a simple test to verify the VM is responsive
+        $ErrorActionPreference = 'Stop'
+        
+        # We'll use a simple test to verify the VM is responsive
         $vmStatus = Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status
         $bootStatus = $vmStatus.Statuses | Where-Object { $_.Code -eq "OSState/generalized" -or $_.Code -eq "OSState/specialized" }
 
@@ -184,7 +192,9 @@ runs:
       run: |
         $ErrorActionPreference = 'Continue' # Don't exit on error during cleanup
 
-        Write-Host "Cleaning up resources..."        # Delete validation VM
+        Write-Host "Cleaning up resources..."
+        
+        # Delete validation VM
         Write-Host "Deleting validation VM: ${{ inputs.validation-vm-name }}"
         Remove-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Force
 
