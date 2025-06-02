@@ -47,9 +47,7 @@ runs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        Write-Host "Waiting for image distribution to complete..."
-
-        # Wait for the image distribution to finish (checking template status)
+        Write-Host "Waiting for image distribution to complete..."        # Wait for the image distribution to finish (checking template status)
         $maxRetries = 60  # 30 minutes (checking every 30 seconds)
         $retryCount = 0
         $success = $false
@@ -57,9 +55,9 @@ runs:
         do {
           $retryCount++
           $res = Get-AzResource `
-            -ResourceGroupName ${{ inputs.sig-resource-group }} `
+            -ResourceGroupName "${{ inputs.sig-resource-group }}" `
             -ResourceType 'Microsoft.VirtualMachineImages/imageTemplates' `
-            -Name ${{ inputs.image-template-name }} `
+            -Name "${{ inputs.image-template-name }}" `
             -ErrorAction SilentlyContinue
           
           if ($res -and $res.Properties.lastRunStatus) {
@@ -94,16 +92,14 @@ runs:
     - name: Create validation resource group
       shell: pwsh
       run: |
-        $ErrorActionPreference = 'Stop'
-
-        # Check if we should use the build RG instead of creating a new one
+        $ErrorActionPreference = 'Stop'        # Check if we should use the build RG instead of creating a new one
         if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
           Write-Host "Creating new validation resource group: ${{ inputs.validation-rg }}"
-          New-AzResourceGroup -Name ${{ inputs.validation-rg }} -Location ${{ inputs.primary-region }} -Force
+          New-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}" -Force
         } else {
           Write-Host "Using existing build resource group for validation: ${{ inputs.build-rg-name }}"
           # Validate that the resource group exists
-          Get-AzResourceGroup -Name ${{ inputs.validation-rg }} -ErrorAction Stop | Out-Null
+          Get-AzResourceGroup -Name "${{ inputs.validation-rg }}" -ErrorAction Stop | Out-Null
         }
 
         Write-Host "Using validation resource group: ${{ inputs.validation-rg }}"
@@ -112,10 +108,8 @@ runs:
     - name: Deploy validation VM
       shell: pwsh
       run: |
-        $ErrorActionPreference = 'Stop'
-
-        # Get the latest image version
-        $imageId = (Get-AzGalleryImageVersion -ResourceGroupName ${{ inputs.sig-resource-group }} -GalleryName ${{ inputs.sig-name }} -GalleryImageDefinitionName ${{ inputs.image-def-name }} | 
+        $ErrorActionPreference = 'Stop'        # Get the latest image version
+        $imageId = (Get-AzGalleryImageVersion -ResourceGroupName "${{ inputs.sig-resource-group }}" -GalleryName "${{ inputs.sig-name }}" -GalleryImageDefinitionName "${{ inputs.image-def-name }}" | 
           Sort-Object -Property PublishingProfile.PublishedDate -Descending | 
           Select-Object -First 1).Id
           
@@ -128,18 +122,16 @@ runs:
 
         # Generate a random password for the VM
         $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
-        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
-
-        # Deploy validation VM
+        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force        # Deploy validation VM
         $vmParams = @{
-          ResourceGroupName = ${{ inputs.validation-rg }}
-          Name = ${{ inputs.validation-vm-name }}
-          Location = ${{ inputs.primary-region }}
+          ResourceGroupName = "${{ inputs.validation-rg }}"
+          Name = "${{ inputs.validation-vm-name }}"
+          Location = "${{ inputs.primary-region }}"
           ImageId = $imageId
           Credential = New-Object System.Management.Automation.PSCredential ("azureuser", $adminPasswordSecure)
           Size = "Standard_D2s_v3"
           SecurityType = "Standard"
-          PublicIpAddressName = "$(${{ inputs.validation-vm-name }})-pip"
+          PublicIpAddressName = "${{ inputs.validation-vm-name }}-pip"
           OpenPorts = 3389
         }
 
@@ -148,10 +140,8 @@ runs:
 
         Write-Host "VM deployment completed. Waiting for VM to be ready..."
         # Wait for VM to be ready
-        Start-Sleep -Seconds 60
-
-        # Check VM status
-        $vmStatus = (Get-AzVM -ResourceGroupName ${{ inputs.validation-rg }} -Name ${{ inputs.validation-vm-name }} -Status).Statuses | 
+        Start-Sleep -Seconds 60        # Check VM status
+        $vmStatus = (Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status).Statuses | 
           Where-Object { $_.Code -like "PowerState/*" } | 
           Select-Object -ExpandProperty DisplayStatus
           
@@ -168,10 +158,8 @@ runs:
     - name: Run validation tests
       shell: pwsh
       run: |
-        $ErrorActionPreference = 'Stop'
-
-        # We'll use a simple test to verify the VM is responsive
-        $vmStatus = Get-AzVM -ResourceGroupName ${{ inputs.validation-rg }} -Name ${{ inputs.validation-vm-name }} -Status
+        $ErrorActionPreference = 'Stop'        # We'll use a simple test to verify the VM is responsive
+        $vmStatus = Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status
         $bootStatus = $vmStatus.Statuses | Where-Object { $_.Code -eq "OSState/generalized" -or $_.Code -eq "OSState/specialized" }
 
         if ($bootStatus.DisplayStatus -eq "OS state is specialized") {
@@ -196,14 +184,12 @@ runs:
       run: |
         $ErrorActionPreference = 'Continue' # Don't exit on error during cleanup
 
-        Write-Host "Cleaning up resources..."
-
-        # Delete validation VM
+        Write-Host "Cleaning up resources..."        # Delete validation VM
         Write-Host "Deleting validation VM: ${{ inputs.validation-vm-name }}"
-        Remove-AzVM -ResourceGroupName ${{ inputs.validation-rg }} -Name ${{ inputs.validation-vm-name }} -Force
+        Remove-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Force
 
         # Delete the VM's OS disk and NIC
-        $resources = Get-AzResource -ResourceGroupName ${{ inputs.validation-rg }} | Where-Object { 
+        $resources = Get-AzResource -ResourceGroupName "${{ inputs.validation-rg }}" | Where-Object {
           $_.Name -like "${{ inputs.validation-vm-name }}*" -and 
           ($_.ResourceType -eq "Microsoft.Compute/disks" -or 
            $_.ResourceType -eq "Microsoft.Network/networkInterfaces" -or
@@ -212,23 +198,19 @@ runs:
         foreach ($resource in $resources) {
           Write-Host "Deleting resource: $($resource.Name)"
           Remove-AzResource -ResourceId $resource.ResourceId -Force
-        }
-
-        # Only delete the resource group if it's a temporary validation group
+        }        # Only delete the resource group if it's a temporary validation group
         if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
           Write-Host "Deleting validation resource group: ${{ inputs.validation-rg }}"
-          Remove-AzResourceGroup -Name ${{ inputs.validation-rg }} -Force -AsJob
+          Remove-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Force -AsJob
         } else {
           Write-Host "Keeping build resource group: ${{ inputs.validation-rg }} (as requested)"
-        }
-
-        # Delete the image template if one was specified
+        }        # Delete the image template if one was specified
         if (-not [string]::IsNullOrEmpty('${{ inputs.image-template-name }}')) {
           Write-Host "Deleting image template: ${{ inputs.image-template-name }}"
           Remove-AzResource `
-            -ResourceGroupName ${{ inputs.sig-resource-group }} `
+            -ResourceGroupName "${{ inputs.sig-resource-group }}" `
             -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
-            -Name ${{ inputs.image-template-name }} `
+            -Name "${{ inputs.image-template-name }}" `
             -Force
         } else {
           Write-Host "No image template was specified, skipping template cleanup"
