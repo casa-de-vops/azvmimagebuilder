@@ -18,7 +18,7 @@ on:
         description: "If true, skips building a new image and only runs validation on the latest image in the gallery."
         type: boolean
         required: false
-        default: false
+        default: true
 
 permissions:
   contents: write
