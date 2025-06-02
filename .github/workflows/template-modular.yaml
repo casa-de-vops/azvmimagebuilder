@@ -139,7 +139,8 @@ jobs:
       SIG_NAME: ${{ inputs.sigName }}
       IMAGE_DEF: ${{ inputs.imageDefName }}
       VALIDATION_VM_NAME: "vm-validate-${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version }}"
-      VALIDATION_RG: "rg-img-validation-${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version }}"
+      VALIDATION_RG: ${{ inputs.buildRGName != '' && inputs.buildRGName || format('rg-img-validation-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) }}
+      BUILD_RG_NAME: ${{ inputs.buildRGName }}
 
     steps:
       - name: Checkout repository
@@ -164,3 +165,4 @@ jobs:
           image-def-name: ${{ env.IMAGE_DEF }}
           validation-vm-name: ${{ env.VALIDATION_VM_NAME }}
           validation-rg: ${{ env.VALIDATION_RG }}
+          build-rg-name: ${{ env.BUILD_RG_NAME }}

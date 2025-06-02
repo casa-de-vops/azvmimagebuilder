@@ -22,13 +22,16 @@ inputs:
     description: 'The Shared Image Gallery name'
   image-def-name:
     required: true
-    description: 'The image definition name'
-  validation-vm-name:
+    description: 'The image definition name'  validation-vm-name:
     required: true
     description: 'The name for the validation VM'
   validation-rg:
     required: true
     description: 'The resource group for validation'
+  build-rg-name:
+    required: false
+    description: 'The build resource group name, if specified will use this instead of creating a new validation RG'
+    default: ''
 
 runs:
   using: 'composite'
@@ -79,15 +82,23 @@ runs:
           exit 1
         }
 
-        Write-Host "Image distribution completed successfully!"
-
-    # ── Create resource group for validation VM ─────────────────
+        Write-Host "Image distribution completed successfully!"    # ── Create resource group for validation VM ─────────────────
     - name: Create validation resource group
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        New-AzResourceGroup -Name ${{ inputs.validation-rg }} -Location ${{ inputs.primary-region }} -Force
-        Write-Host "Created validation resource group: ${{ inputs.validation-rg }}"
+        
+        # Check if we should use the build RG instead of creating a new one
+        if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
+          Write-Host "Creating new validation resource group: ${{ inputs.validation-rg }}"
+          New-AzResourceGroup -Name ${{ inputs.validation-rg }} -Location ${{ inputs.primary-region }} -Force
+        } else {
+          Write-Host "Using existing build resource group for validation: ${{ inputs.build-rg-name }}"
+          # Validate that the resource group exists
+          Get-AzResourceGroup -Name ${{ inputs.validation-rg }} -ErrorAction Stop | Out-Null
+        }
+        
+        Write-Host "Using validation resource group: ${{ inputs.validation-rg }}"
 
     # ── Deploy validation VM using the new image ────────────────
     - name: Deploy validation VM
@@ -168,9 +179,7 @@ runs:
         Write-Output "### Validation Results" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "* Validation VM: **${{ inputs.validation-vm-name }}**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "* VM Status: **Running**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "* Validation Result: **✅ Success**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-
-    # ── Cleanup resources ─────────────────────────────────────
+        Write-Output "* Validation Result: **✅ Success**" | Out-File -Append $env:GITHUB_STEP_SUMMARY    # ── Cleanup resources ─────────────────────────────────────
     - name: Cleanup resources
       if: always()
       shell: pwsh
@@ -179,9 +188,29 @@ runs:
         
         Write-Host "Cleaning up resources..."
         
-        # Delete validation VM and resource group
-        Write-Host "Deleting validation resource group: ${{ inputs.validation-rg }}"
-        Remove-AzResourceGroup -Name ${{ inputs.validation-rg }} -Force -AsJob
+        # Delete validation VM
+        Write-Host "Deleting validation VM: ${{ inputs.validation-vm-name }}"
+        Remove-AzVM -ResourceGroupName ${{ inputs.validation-rg }} -Name ${{ inputs.validation-vm-name }} -Force
+        
+        # Delete the VM's OS disk and NIC
+        $resources = Get-AzResource -ResourceGroupName ${{ inputs.validation-rg }} | Where-Object { 
+          $_.Name -like "${{ inputs.validation-vm-name }}*" -and 
+          ($_.ResourceType -eq "Microsoft.Compute/disks" -or 
+           $_.ResourceType -eq "Microsoft.Network/networkInterfaces" -or
+           $_.ResourceType -eq "Microsoft.Network/publicIPAddresses")
+        }
+        foreach ($resource in $resources) {
+          Write-Host "Deleting resource: $($resource.Name)"
+          Remove-AzResource -ResourceId $resource.ResourceId -Force
+        }
+        
+        # Only delete the resource group if it's a temporary validation group
+        if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
+          Write-Host "Deleting validation resource group: ${{ inputs.validation-rg }}"
+          Remove-AzResourceGroup -Name ${{ inputs.validation-rg }} -Force -AsJob
+        } else {
+          Write-Host "Keeping build resource group: ${{ inputs.validation-rg }} (as requested)"
+        }
         
         # Delete the image template
         Write-Host "Deleting image template: ${{ inputs.image-template-name }}"
