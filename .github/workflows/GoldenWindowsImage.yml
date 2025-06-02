@@ -23,7 +23,7 @@ permissions:
 jobs:
   run-image-builder:
     name: Build and distribute custom VM image
-    uses: ./.github/workflows/template.yaml
+    uses: ./.github/workflows/template-modular.yaml
     with:
       templateFolder: "1_Creating_a_Custom_Win_Shared_Image_Gallery_Image" # Folder containing the image template (located in the ./templates directory)
       templateName: "GoldenWindowsImage.json" # JSON template used for creating the custom VM image

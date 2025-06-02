@@ -218,3 +218,186 @@ jobs:
         run: |
           echo "### Azure Image Builder output" >> "$GITHUB_STEP_SUMMARY"
           echo "*${{ inputs.templateType }}:* **${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name }}**" >> "$GITHUB_STEP_SUMMARY"
+
+  VALIDATE-AND-CLEANUP:
+    needs: [PREPARE-IMAGE-TEMPLATE, BUILD-DISTRIBUTE-IMAGE]
+    runs-on: "windows-latest"
+    if: github.ref == 'refs/heads/main' && success()
+    
+    env:
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      TEMPLATE_TYPE: ${{ inputs.templateType }}
+      IMAGE_TEMPLATE_NAME: ${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name }}
+      PRIMARY_REGION: ${{ inputs.location }}
+      SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      SIG_NAME: ${{ inputs.sigName }}
+      IMAGE_DEF: ${{ inputs.imageDefName }}
+      VALIDATION_VM_NAME: "vm-validate-${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version }}"
+      VALIDATION_RG: "rg-img-validation-${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version }}"
+
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      # ── Wait for image distribution to complete ──────────────────
+      - name: Wait for image distribution to complete
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "Waiting for image distribution to complete..."
+
+          # Wait for the image distribution to finish (checking template status)
+          $maxRetries = 60  # 30 minutes (checking every 30 seconds)
+          $retryCount = 0
+          $success = $false
+
+          do {
+            $retryCount++
+            $res = Get-AzResource `
+              -ResourceGroupName $env:SIG_RG `
+              -ResourceType 'Microsoft.VirtualMachineImages/imageTemplates' `
+              -Name $env:IMAGE_TEMPLATE_NAME `
+              -ErrorAction SilentlyContinue
+            
+            if ($res -and $res.Properties.lastRunStatus) {
+              $status = $res.Properties.lastRunStatus
+              Write-Host "[$retryCount/$maxRetries] Image status: $($status.runState) → $($status.runSubState)"
+              
+              if ($status.runState -eq 'Succeeded') {
+                $success = $true
+                break
+              }
+              elseif ($status.runState -eq 'Failed' -or $status.runState -eq 'Canceled') {
+                Write-Host "Image creation failed with status: $($status.runState)"
+                Write-Host "Error: $($status.message)"
+                exit 1
+              }
+            }
+            else {
+              Write-Host "[$retryCount/$maxRetries] Waiting for image template status..."
+            }
+            
+            Start-Sleep -Seconds 30
+          } while ($retryCount -lt $maxRetries)
+
+          if (-not $success) {
+            Write-Host "Timed out waiting for image distribution to complete!"
+            exit 1
+          }
+
+          Write-Host "Image distribution completed successfully!"
+
+      # ── Create resource group for validation VM ─────────────────
+      - name: Create validation resource group
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-AzResourceGroup -Name $env:VALIDATION_RG -Location $env:PRIMARY_REGION -Force
+          Write-Host "Created validation resource group: $env:VALIDATION_RG"
+
+      # ── Deploy validation VM using the new image ────────────────
+      - name: Deploy validation VM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          
+          # Get the latest image version
+          $imageId = (Get-AzGalleryImageVersion -ResourceGroupName $env:SIG_RG -GalleryName $env:SIG_NAME -GalleryImageDefinitionName $env:IMAGE_DEF | 
+            Sort-Object -Property PublishingProfile.PublishedDate -Descending | 
+            Select-Object -First 1).Id
+            
+          if (-not $imageId) {
+            Write-Host "Could not find image in gallery. Validation failed."
+            exit 1
+          }
+          
+          Write-Host "Found image ID: $imageId"
+          
+          # Generate a random password for the VM
+          $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
+          $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
+          
+          # Deploy validation VM
+          $vmParams = @{
+            ResourceGroupName = $env:VALIDATION_RG
+            Name = $env:VALIDATION_VM_NAME
+            Location = $env:PRIMARY_REGION
+            ImageId = $imageId
+            Credential = New-Object System.Management.Automation.PSCredential ("azureuser", $adminPasswordSecure)
+            Size = "Standard_D2s_v3"
+            SecurityType = "Standard"
+            PublicIpAddressName = "$($env:VALIDATION_VM_NAME)-pip"
+            OpenPorts = 3389
+          }
+          
+          Write-Host "Deploying validation VM..."
+          $vm = New-AzVM @vmParams
+          
+          Write-Host "VM deployment completed. Waiting for VM to be ready..."
+          # Wait for VM to be ready
+          Start-Sleep -Seconds 60
+          
+          # Check VM status
+          $vmStatus = (Get-AzVM -ResourceGroupName $env:VALIDATION_RG -Name $env:VALIDATION_VM_NAME -Status).Statuses | 
+            Where-Object { $_.Code -like "PowerState/*" } | 
+            Select-Object -ExpandProperty DisplayStatus
+            
+          Write-Host "VM Status: $vmStatus"
+          
+          if ($vmStatus -ne "VM running") {
+            Write-Host "VM is not running. Validation failed."
+            exit 1
+          }
+          
+          Write-Host "Validation VM deployed and running successfully!"
+      
+      # ── Run basic validation tests on VM ───────────────────────
+      - name: Run validation tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          
+          # We'll use a simple test to verify the VM is responsive
+          $vmStatus = Get-AzVM -ResourceGroupName $env:VALIDATION_RG -Name $env:VALIDATION_VM_NAME -Status
+          $bootStatus = $vmStatus.Statuses | Where-Object { $_.Code -eq "OSState/generalized" -or $_.Code -eq "OSState/specialized" }
+          
+          if ($bootStatus.DisplayStatus -eq "OS state is specialized") {
+            Write-Host "✅ VM is properly specialized (not generalized)"
+          } else {
+            Write-Host "❌ VM is not in the expected state. Found: $($bootStatus.DisplayStatus)"
+            exit 1
+          }
+          
+          Write-Host "✅ Validation tests passed!"
+          
+          # Add to summary
+          Write-Output "### Validation Results" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Write-Output "* Validation VM: **$env:VALIDATION_VM_NAME**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Write-Output "* VM Status: **Running**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Write-Output "* Validation Result: **✅ Success**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+      # ── Cleanup resources ─────────────────────────────────────
+      - name: Cleanup resources
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue' # Don't exit on error during cleanup
+          
+          Write-Host "Cleaning up resources..."
+          
+          # Delete validation VM and resource group
+          Write-Host "Deleting validation resource group: $env:VALIDATION_RG"
+          Remove-AzResourceGroup -Name $env:VALIDATION_RG -Force -AsJob
+          
+          # Delete the image template
+          Write-Host "Deleting image template: $env:IMAGE_TEMPLATE_NAME"
+          Remove-AzResource `
+            -ResourceGroupName $env:SIG_RG `
+            -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
+            -Name $env:IMAGE_TEMPLATE_NAME `
+            -Force

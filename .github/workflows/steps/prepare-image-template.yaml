@@ -1,0 +1,153 @@
+name: Prepare Image Template
+
+description: |
+  Reusable step template for preparing the Azure VM Image Builder template.
+
+inputs:
+  template-file:
+    required: true
+    type: string
+  template-dir:
+    required: true
+    type: string
+  template-type:
+    required: true
+    type: string
+  subscription-id:
+    required: true
+    type: string
+  sig-resource-group:
+    required: true
+    type: string
+  image-def-name:
+    required: true
+    type: string
+  sig-name:
+    required: true
+    type: string
+  primary-region:
+    required: true
+    type: string
+  additional-region:
+    required: false
+    type: string
+    default: ''
+  run-output-name:
+    required: true
+    type: string
+  build-rg-name:
+    required: false
+    type: string
+  img-builder-id:
+    required: true
+    type: string
+  image-template-name:
+    required: true
+    type: string
+
+outputs:
+  template-validated:
+    description: "Whether the template was validated successfully"
+    value: ${{ steps.validate_template.outputs.validation_success }}
+
+runs:
+  using: composite
+  steps:
+    # ── Resolve template tokens ─────────────────────────────────
+    - name: Resolve image template parameters
+      shell: bash
+      run: |
+        set -euo pipefail
+        cp "${{ inputs.template-dir }}/${{ inputs.template-file }}" "${{ inputs.template-file }}"
+
+        sed -i -e "s|<subscriptionID>|${{ inputs.subscription-id }}|g"        "${{ inputs.template-file }}"
+        sed -i -e "s|<rgName>|${{ inputs.sig-resource-group }}|g"             "${{ inputs.template-file }}"
+        sed -i -e "s|<imageDefName>|${{ inputs.image-def-name }}|g"           "${{ inputs.template-file }}"
+        sed -i -e "s|<sharedImageGalName>|${{ inputs.sig-name }}|g"           "${{ inputs.template-file }}"
+        sed -i -e "s|<region1>|${{ inputs.primary-region }}|g"                "${{ inputs.template-file }}"
+        sed -i -e "s|<region2>|${{ inputs.additional-region }}|g"             "${{ inputs.template-file }}"
+        sed -i -e "s|<runOutputName>|${{ inputs.run-output-name }}|g"         "${{ inputs.template-file }}"
+        sed -i -e "s|<buildRGName>|${{ inputs.build-rg-name }}|g"             "${{ inputs.template-file }}"
+        sed -i -e "s%<imgBuilderId>%${{ inputs.img-builder-id }}%g"           "${{ inputs.template-file }}"
+
+    # ── Validate template ─────────────────────────────────────────
+    - name: Validate image template
+      id: validate_template
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        echo "Validating template file: ${{ inputs.template-file }}"
+        
+        # First validate JSON syntax
+        echo "Validating JSON syntax..."
+        cat "${{ inputs.template-file }}" | jq . >/dev/null || {
+          echo "❌ Invalid JSON syntax in template file!"
+          echo "validation_success=false" >> "$GITHUB_OUTPUT"
+          exit 1
+        }
+        
+        if [[ "${{ inputs.template-type }}" == "imageTemplate" ]]; then
+          # Validate source type
+          SOURCE_TYPE=$(jq -r '.properties.source.type' "${{ inputs.template-file }}")
+          if [[ -z "$SOURCE_TYPE" || "$SOURCE_TYPE" == "null" ]]; then
+            echo "❌ Missing or invalid source type in template!"
+            echo "validation_success=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "✅ Source type validation passed: $SOURCE_TYPE"
+          
+          # Validate distribute array
+          DISTRIBUTE_COUNT=$(jq '.properties.distribute | length' "${{ inputs.template-file }}")
+          if [[ "$DISTRIBUTE_COUNT" -lt 1 ]]; then
+            echo "❌ Template must have at least one distribute target!"
+            echo "validation_success=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "✅ Distribute array validation passed: $DISTRIBUTE_COUNT target(s)"
+        fi
+        
+        echo "✅ Template validation successful!"
+        echo "validation_success=true" >> "$GITHUB_OUTPUT"
+
+    # ── Upload resolved template ────────────────────────────────────
+    - name: Upload resolved template
+      uses: actions/upload-artifact@v4
+      with:
+        name: resolved-image-template
+        path: ${{ inputs.template-file }}
+
+    # ── Submit Image Template ──────────────────────────────────────
+    - name: Submit Image Template
+      if: github.ref == 'refs/heads/main'
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        if [[ "${{ inputs.template-type }}" == "imageTemplate" ]]; then
+          az resource create \
+            --resource-group ${{ inputs.sig-resource-group }} \
+            --properties @"${{ inputs.template-file }}" \
+            --is-full-object \
+            --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+            -n "${{ inputs.image-template-name }}"
+        elif [[ "${{ inputs.template-type }}" == "armTemplate" ]]; then
+          # Use PowerShell to deploy ARM template
+          pwsh -Command "
+            \$ErrorActionPreference = 'Stop'
+            \$templateParams = @{
+              imageTemplateName = '${{ inputs.image-template-name }}'
+              svclocation       = '${{ inputs.primary-region }}'
+              'api-version'     = '2022-07-01'
+            }
+            New-AzResourceGroupDeployment \
+              -ResourceGroupName  '${{ inputs.sig-resource-group }}' \
+              -TemplateFile       '${{ inputs.template-file }}' \
+              -Name               'it-${{ inputs.image-template-name }}' \
+              -TemplateParameterObject \$templateParams
+          "
+        else
+          echo "Invalid template type specified"
+          exit 1
+        fi
+        echo "Template submitted successfully"
