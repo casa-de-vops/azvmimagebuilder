@@ -61,31 +61,27 @@ jobs:
       image_template_name: ${{ steps.set_version.outputs.image_template_name }}
 
     steps:
-      # ─────────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      # ── Azure login ─────────────────────────────────────────────
       - name: Azure login
-        uses: ./.github/workflows/steps/azure-login
+        uses: ./.github/actions/azure-login
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # ── Set version ─────────────────────────────────────────────
       - name: Set version
         id: set_version
-        uses: ./.github/workflows/steps/set-version
+        uses: ./.github/actions/set-version
         with:
           run-output-name: ${{ inputs.runOutputName }}
 
-      # ── Prepare image template ───────────────────────────────────
       - name: Prepare image template
-        uses: ./.github/workflows/steps/prepare-image-template
+        uses: ./.github/actions/prepare-image-template
         with:
           template-file: ${{ env.TEMPLATE_FILE }}
           template-dir: ${{ env.TEMPLATE_DIR }}
@@ -112,20 +108,18 @@ jobs:
       IMAGE_TEMPLATE_NAME: ${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name }}
 
     steps:
-      # ── Azure login ─────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Azure login
-        uses: ./.github/workflows/steps/azure-login
+        uses: ./.github/actions/azure-login
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # ── Build and distribute image ───────────────────────────────
       - name: Build and distribute image
-        uses: ./.github/workflows/steps/build-distribute-image
+        uses: ./.github/actions/build-distribute-image
         with:
           template-type: ${{ env.TEMPLATE_TYPE }}
           sig-resource-group: ${{ env.SIG_RG }}
@@ -148,20 +142,18 @@ jobs:
       VALIDATION_RG: "rg-img-validation-${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version }}"
 
     steps:
-      # ── Azure login ─────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Azure login
-        uses: ./.github/workflows/steps/azure-login
+        uses: ./.github/actions/azure-login
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # ── Validate and cleanup ───────────────────────────────────
       - name: Validate and cleanup
-        uses: ./.github/workflows/steps/validate-cleanup
+        uses: ./.github/actions/validate-cleanup
         with:
           sig-resource-group: ${{ env.SIG_RG }}
           template-type: ${{ env.TEMPLATE_TYPE }}

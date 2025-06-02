@@ -8,17 +8,17 @@ The workflow is organized into the following components:
 
 ### Main Workflow File
 
-- `template-modular.yaml`: The main orchestration file that calls the individual step templates.
+- `template-modular.yaml`: The main orchestration file that calls the individual composite actions.
 
-### Step Templates
+### Composite Actions
 
-Located in the `steps/` directory:
+Located in the `.github/actions/` directory:
 
-- `azure-login.yaml`: Handles Azure authentication using OIDC.
-- `set-version.yaml`: Creates version numbers and image template names.
-- `prepare-image-template.yaml`: Prepares and validates the image template.
-- `build-distribute-image.yaml`: Builds and distributes the image.
-- `validate-cleanup.yaml`: Validates the created image and cleans up resources.
+- `azure-login`: Handles Azure authentication using OIDC.
+- `set-version`: Creates version numbers and image template names.
+- `prepare-image-template`: Prepares and validates the image template.
+- `build-distribute-image`: Builds and distributes the image.
+- `validate-cleanup`: Validates the created image and cleans up resources.
 
 ### Utility Scripts
 
