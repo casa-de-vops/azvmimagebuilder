@@ -27,17 +27,20 @@ inputs:
     description: 'The name for the validation VM'
   validation-rg:
     required: true
-    description: 'The resource group for validation'
-  build-rg-name:
+    description: 'The resource group for validation'  build-rg-name:
     required: false
     description: 'The build resource group name, if specified will use this instead of creating a new validation RG'
     default: ''
+  skip-distribution-wait:
+    required: false
+    description: 'If true, skips waiting for image distribution to complete, useful when validating existing images'
+    default: false
 
 runs:
   using: 'composite'
-  steps:
-    # ── Wait for image distribution to complete ──────────────────
+  steps:    # ── Wait for image distribution to complete ──────────────────
     - name: Wait for image distribution to complete
+      if: inputs.skip-distribution-wait != 'true'
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
@@ -211,11 +214,14 @@ runs:
         } else {
           Write-Host "Keeping build resource group: ${{ inputs.validation-rg }} (as requested)"
         }
-        
-        # Delete the image template
-        Write-Host "Deleting image template: ${{ inputs.image-template-name }}"
-        Remove-AzResource `
-          -ResourceGroupName ${{ inputs.sig-resource-group }} `
-          -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
-          -Name ${{ inputs.image-template-name }} `
-          -Force
+          # Delete the image template if one was specified
+        if (-not [string]::IsNullOrEmpty('${{ inputs.image-template-name }}')) {
+          Write-Host "Deleting image template: ${{ inputs.image-template-name }}"
+          Remove-AzResource `
+            -ResourceGroupName ${{ inputs.sig-resource-group }} `
+            -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
+            -Name ${{ inputs.image-template-name }} `
+            -Force
+        } else {
+          Write-Host "No image template was specified, skipping template cleanup"
+        }

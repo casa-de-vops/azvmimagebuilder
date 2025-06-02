@@ -13,6 +13,12 @@ on:
     paths:
       - "templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/**"
   workflow_dispatch: # manual run button
+    inputs:
+      skipBuild:
+        description: "If true, skips building a new image and only runs validation on the latest image in the gallery."
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -36,4 +42,5 @@ jobs:
       additionalregion: "eastus2" # Additional region for image replication
       runOutputName: "GoldenLinuxImage" # Identifier used for the build output
       buildRGName: "rg-example-westus2-linux-001" # Resource group for the image build (optional, can be the same as sigResourceGroup)
+      skipBuild: ${{ inputs.skipBuild || false }}
     secrets: inherit

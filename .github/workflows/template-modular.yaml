@@ -22,6 +22,11 @@ on:
         description: "armTemplate | imageTemplate. Allowed values: 'armTemplate', 'imageTemplate'."
         type: string
         required: true
+      skipBuild:
+        description: "If true, skips building a new image and only runs validation on the latest image in the gallery."
+        type: boolean
+        required: false
+        default: false
 
     secrets:
       AZURE_CLIENT_ID: { required: true }
@@ -41,6 +46,7 @@ permissions:
 jobs:
   PREPARE-IMAGE-TEMPLATE:
     runs-on: "windows-latest"
+    if: inputs.skipBuild != true
 
     env:
       SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -100,7 +106,7 @@ jobs:
   BUILD-DISTRIBUTE-IMAGE:
     needs: PREPARE-IMAGE-TEMPLATE
     runs-on: "windows-latest"
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.skipBuild != true
     
     env:
       SIG_RG: ${{ inputs.sigResourceGroup }}
@@ -128,19 +134,22 @@ jobs:
   VALIDATE-AND-CLEANUP:
     needs: [PREPARE-IMAGE-TEMPLATE, BUILD-DISTRIBUTE-IMAGE]
     runs-on: "windows-latest"
-    if: github.ref == 'refs/heads/main' && success()
+    if: >
+      (github.ref == 'refs/heads/main' && success() && inputs.skipBuild != true) || 
+      (inputs.skipBuild == true)
     
     env:
       SIG_RG: ${{ inputs.sigResourceGroup }}
       TEMPLATE_TYPE: ${{ inputs.templateType }}
-      IMAGE_TEMPLATE_NAME: ${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name }}
+      IMAGE_TEMPLATE_NAME: ${{ inputs.skipBuild != true && needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name || '' }}
       PRIMARY_REGION: ${{ inputs.location }}
       SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       SIG_NAME: ${{ inputs.sigName }}
       IMAGE_DEF: ${{ inputs.imageDefName }}
-      VALIDATION_VM_NAME: "vm-validate-${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version }}"
-      VALIDATION_RG: ${{ inputs.buildRGName != '' && inputs.buildRGName || format('rg-img-validation-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) }}
+      VALIDATION_VM_NAME: ${{ inputs.skipBuild != true && format('vm-validate-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) || format('vm-validate-latest-{0}', github.run_number) }}
+      VALIDATION_RG: ${{ inputs.buildRGName != '' && inputs.buildRGName || (inputs.skipBuild != true && format('rg-img-validation-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) || format('rg-img-validation-latest-{0}', github.run_number)) }}
       BUILD_RG_NAME: ${{ inputs.buildRGName }}
+      SKIP_DISTRIBUTION_WAIT: ${{ inputs.skipBuild }}
 
     steps:
       - name: Checkout repository
@@ -166,3 +175,4 @@ jobs:
           validation-vm-name: ${{ env.VALIDATION_VM_NAME }}
           validation-rg: ${{ env.VALIDATION_RG }}
           build-rg-name: ${{ env.BUILD_RG_NAME }}
+          skip-distribution-wait: ${{ env.SKIP_DISTRIBUTION_WAIT }}
