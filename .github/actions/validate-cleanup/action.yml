@@ -124,16 +124,15 @@ runs:
           exit 1
         }
 
-        Write-Host "Found image ID: $imageId"        # Generate a random password for the VM
-        $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
-        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
+        Write-Host "Found image ID: $imageId"
 
-        # Deploy validation VM
+        # Generate a random password for the VM
+        $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
+        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force        # Deploy validation VM
         $vmParams = @{
           ResourceGroupName = "${{ inputs.validation-rg }}"
           Name = "${{ inputs.validation-vm-name }}"
           Location = "${{ inputs.primary-region }}"
-          ImageId = $imageId
           Credential = New-Object System.Management.Automation.PSCredential ("azureuser", $adminPasswordSecure)
           Size = "Standard_D2s_v3"
           SecurityType = "Standard"
@@ -141,7 +140,9 @@ runs:
           OpenPorts = 3389
         }        
         Write-Host "Deploying validation VM..."
-        $vm = New-AzVM @vmParams
+        
+        # Use the -Image parameter directly instead of ImageId
+        $vm = New-AzVM @vmParams -Image $imageId
         
         Write-Host "VM deployment completed. Waiting for VM to be ready..."
 
@@ -210,12 +211,11 @@ runs:
         foreach ($resource in $resources) {
           Write-Host "Deleting resource: $($resource.Name)"
           Remove-AzResource -ResourceId $resource.ResourceId -Force
-        }
-
-        # Only delete the resource group if it's a temporary validation group
+        }        # Only delete the resource group if it's a temporary validation group
         if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
           Write-Host "Deleting validation resource group: ${{ inputs.validation-rg }}"
-          Remove-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Force -AsJob        } else {
+          Remove-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Force -AsJob
+        } else {
           Write-Host "Keeping build resource group: ${{ inputs.validation-rg }} (as requested)"
         }
 
