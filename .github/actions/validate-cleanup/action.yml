@@ -128,7 +128,8 @@ runs:
 
         # Generate a random password for the VM
         $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
-        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force        # Deploy validation VM
+        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
+          # Deploy validation VM
         $vmParams = @{
           ResourceGroupName = "${{ inputs.validation-rg }}"
           Name = "${{ inputs.validation-vm-name }}"
@@ -138,12 +139,13 @@ runs:
           SecurityType = "Standard"
           PublicIpAddressName = "${{ inputs.validation-vm-name }}-pip"
           OpenPorts = 3389
-        }        
+        }
+        
         Write-Host "Deploying validation VM..."
         
         # Use the -Image parameter directly instead of ImageId
         $vm = New-AzVM @vmParams -Image $imageId
-        
+
         Write-Host "VM deployment completed. Waiting for VM to be ready..."
 
         # Wait for VM to be ready
@@ -194,24 +196,67 @@ runs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Continue' # Don't exit on error during cleanup
-
+        
         Write-Host "Cleaning up resources..."
 
         # Delete validation VM
-        Write-Host "Deleting validation VM: ${{ inputs.validation-vm-name }}"
-        Remove-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Force
+        try {
+          Write-Host "Deleting validation VM: ${{ inputs.validation-vm-name }}"
+          Remove-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Force
+        } catch {
+          Write-Host "Error deleting VM ${{ inputs.validation-vm-name }}: $_"
+        }
 
-        # Delete the VM's OS disk and NIC
+        # Wait for the VM deletion to complete before proceeding
+        Start-Sleep -Seconds 30
+
+        # Delete the VM's resources in the correct order - first get all resources
         $resources = Get-AzResource -ResourceGroupName "${{ inputs.validation-rg }}" | Where-Object {
           $_.Name -like "${{ inputs.validation-vm-name }}*" -and 
           ($_.ResourceType -eq "Microsoft.Compute/disks" -or 
            $_.ResourceType -eq "Microsoft.Network/networkInterfaces" -or
            $_.ResourceType -eq "Microsoft.Network/publicIPAddresses")
-        }        
-        foreach ($resource in $resources) {
-          Write-Host "Deleting resource: $($resource.Name)"
-          Remove-AzResource -ResourceId $resource.ResourceId -Force
-        }        # Only delete the resource group if it's a temporary validation group
+        }
+        
+        # First delete network interfaces
+        $nics = $resources | Where-Object { $_.ResourceType -eq "Microsoft.Network/networkInterfaces" }
+        foreach ($nic in $nics) {
+          try {
+            Write-Host "Deleting resource: $($nic.Name)"
+            Remove-AzResource -ResourceId $nic.ResourceId -Force
+          } catch {
+            Write-Host "Error deleting NIC $($nic.Name): $_"
+          }
+        }
+        
+        # Wait a bit for the NICs to be fully deleted
+        Start-Sleep -Seconds 30
+        
+        # Then delete public IPs
+        $pips = $resources | Where-Object { $_.ResourceType -eq "Microsoft.Network/publicIPAddresses" }
+        foreach ($pip in $pips) {
+          try {
+            Write-Host "Deleting resource: $($pip.Name)"
+            Remove-AzResource -ResourceId $pip.ResourceId -Force
+          } catch {
+            Write-Host "Error deleting Public IP $($pip.Name): $_"
+          }
+        }
+        
+        # Wait for public IPs to be fully deleted
+        Start-Sleep -Seconds 30
+        
+        # Finally delete disks
+        $disks = $resources | Where-Object { $_.ResourceType -eq "Microsoft.Compute/disks" }
+        foreach ($disk in $disks) {
+          try {
+            Write-Host "Deleting resource: $($disk.Name)"
+            Remove-AzResource -ResourceId $disk.ResourceId -Force          } catch {
+            Write-Host "Error deleting disk $($disk.Name): $_"
+          }
+        }
+        
+        # Only delete the resource group if it's a temporary validation group
         if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
           Write-Host "Deleting validation resource group: ${{ inputs.validation-rg }}"
           Remove-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Force -AsJob
