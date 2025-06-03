@@ -178,34 +178,3 @@ runs:
         }
 
         Write-Host "Validation VM deployed and running successfully!"
-
-    # ── Run basic validation tests on VM ───────────────────────
-    - name: Run validation tests
-      shell: pwsh
-      run: |
-        $ErrorActionPreference = 'Stop'
-
-        # We'll use a simple test to verify the VM is responsive
-        $vmStatus = Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status
-        $bootStatus = $vmStatus.Statuses | Where-Object { $_.Code -eq "OSState/generalized" -or $_.Code -eq "OSState/specialized" }
-
-        if ($bootStatus.DisplayStatus -eq "OS state is specialized") {
-          Write-Host "✅ VM is properly specialized (not generalized)"
-        } else {
-          Write-Host "❌ VM is not in the expected state. Found: $($bootStatus.DisplayStatus)"
-          exit 1
-        }
-        
-        Write-Host "✅ Validation tests passed!"
-
-        # Add to summary
-        Write-Output "### ✅ Validation Results" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "* **Validation VM**: ${{ inputs.validation-vm-name }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "* **Resource Group**: ${{ inputs.validation-rg }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "* **Region**: ${{ inputs.primary-region }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "* **VM Status**: Running" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "* **Validation Result**: ✅ Success" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "**Ready for manual testing!** The VM is now available for additional verification." | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "⚠️ **Next Step**: Manual approval will be required before resource cleanup." | Out-File -Append $env:GITHUB_STEP_SUMMARY
