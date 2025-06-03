@@ -180,15 +180,45 @@ runs:
         } else {
           Write-Host "❌ VM is not in the expected state. Found: $($bootStatus.DisplayStatus)"
           exit 1
-        }
-
-        Write-Host "✅ Validation tests passed!"
+        }        Write-Host "✅ Validation tests passed!"
 
         # Add to summary
         Write-Output "### Validation Results" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "* Validation VM: **${{ inputs.validation-vm-name }}**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "* VM Status: **Running**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "* Validation Result: **✅ Success**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "**⚠️ Manual approval required before cleanup**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "Please review the validation results and approve the cleanup step when ready." | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+    # ── Manual approval before cleanup ──────────────────────────
+    - name: Manual approval before cleanup
+      shell: pwsh
+      run: |
+        Write-Host "════════════════════════════════════════════════════════════════"
+        Write-Host "🛑 MANUAL APPROVAL REQUIRED"
+        Write-Host "════════════════════════════════════════════════════════════════"
+        Write-Host ""
+        Write-Host "Validation VM has been deployed and tested successfully!"
+        Write-Host "VM Name: ${{ inputs.validation-vm-name }}"
+        Write-Host "Resource Group: ${{ inputs.validation-rg }}"
+        Write-Host "Region: ${{ inputs.primary-region }}"
+        Write-Host ""
+        Write-Host "You can now:"
+        Write-Host "1. Connect to the VM to perform additional manual testing"
+        Write-Host "2. Review the validation results"
+        Write-Host "3. Take any necessary screenshots or documentation"
+        Write-Host ""
+        Write-Host "When you're ready to proceed with cleanup, manually approve"
+        Write-Host "the next step in the GitHub Actions workflow."
+        Write-Host ""
+        Write-Host "════════════════════════════════════════════════════════════════"
+        
+        # Create a waiting file to indicate approval is needed
+        $waitFile = "$env:RUNNER_TEMP/approval_needed.txt"
+        "Waiting for manual approval to proceed with cleanup" | Out-File $waitFile
+        
+        Write-Host "Workflow will pause here until manual approval is given..."
 
     # ── Cleanup resources ─────────────────────────────────────
     - name: Cleanup resources
