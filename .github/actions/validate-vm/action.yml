@@ -1,0 +1,211 @@
+name: "Validate VM Image"
+description: "Validates a custom VM image by deploying a test VM"
+
+inputs:
+  sig-resource-group:
+    required: true
+    description: "The resource group for the Shared Image Gallery"
+  template-type:
+    required: true
+    description: "The template type (armTemplate or imageTemplate)"
+  image-template-name:
+    required: true
+    description: "The image template name"
+  primary-region:
+    required: true
+    description: "The primary region for image distribution"
+  subscription-id:
+    required: true
+    description: "Azure subscription ID"
+  sig-name:
+    required: true
+    description: "The Shared Image Gallery name"
+  image-def-name:
+    required: true
+    description: "The image definition name"
+  validation-vm-name:
+    required: true
+    description: "The name for the validation VM"
+  validation-rg:
+    required: true
+    description: "The resource group for validation"
+  build-rg-name:
+    required: false
+    description: "The build resource group name, if specified will use this instead of creating a new validation RG"
+    default: ""
+  skip-distribution-wait:
+    required: false
+    description: "If true, skips waiting for image distribution to complete, useful when validating existing images"
+    default: false
+
+outputs:
+  vm-name:
+    description: "The name of the deployed validation VM"
+    value: ${{ inputs.validation-vm-name }}
+  resource-group:
+    description: "The resource group containing the validation VM"
+    value: ${{ inputs.validation-rg }}
+  image-id:
+    description: "The ID of the validated image"
+    value: ${{ steps.deploy-vm.outputs.image-id }}
+
+runs:
+  using: "composite"
+  steps:
+    # ── Wait for image distribution to complete ──────────────────
+    - name: Wait for image distribution to complete
+      if: inputs.skip-distribution-wait != 'true'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Write-Host "Waiting for image distribution to complete..."
+
+        # Wait for the image distribution to finish (checking template status)
+        $maxRetries = 60  # 30 minutes (checking every 30 seconds)
+        $retryCount = 0
+        $success = $false
+
+        do {
+          $retryCount++
+          $res = Get-AzResource `
+            -ResourceGroupName "${{ inputs.sig-resource-group }}" `
+            -ResourceType 'Microsoft.VirtualMachineImages/imageTemplates' `
+            -Name "${{ inputs.image-template-name }}" `
+            -ErrorAction SilentlyContinue
+          
+          if ($res -and $res.Properties.lastRunStatus) {
+            $status = $res.Properties.lastRunStatus
+            Write-Host "[$retryCount/$maxRetries] Image status: $($status.runState) → $($status.runSubState)"
+            
+            if ($status.runState -eq 'Succeeded') {
+              $success = $true
+              break
+            }
+            elseif ($status.runState -eq 'Failed' -or $status.runState -eq 'Canceled') {
+              Write-Host "Image creation failed with status: $($status.runState)"
+              Write-Host "Error: $($status.message)"
+              exit 1
+            }
+          }
+          else {
+            Write-Host "[$retryCount/$maxRetries] Waiting for image template status..."
+          }
+          
+          Start-Sleep -Seconds 30
+        } while ($retryCount -lt $maxRetries)
+
+        if (-not $success) {
+          Write-Host "Timed out waiting for image distribution to complete!"
+          exit 1
+        }
+
+        Write-Host "Image distribution completed successfully!"
+
+    # ── Create resource group for validation VM ─────────────────
+    - name: Create validation resource group
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # Check if we should use the build RG instead of creating a new one
+        if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
+          Write-Host "Creating new validation resource group: ${{ inputs.validation-rg }}"
+          New-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}" -Force
+        } else {
+          Write-Host "Using existing build resource group for validation: ${{ inputs.build-rg-name }}"
+          # Validate that the resource group exists
+          Get-AzResourceGroup -Name "${{ inputs.validation-rg }}" -ErrorAction Stop | Out-Null
+        }
+
+        Write-Host "Using validation resource group: ${{ inputs.validation-rg }}"
+
+    # ── Deploy validation VM using the new image ────────────────
+    - name: Deploy validation VM
+      id: deploy-vm
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # Get the latest image version
+        $imageId = (Get-AzGalleryImageVersion -ResourceGroupName "${{ inputs.sig-resource-group }}" -GalleryName "${{ inputs.sig-name }}" -GalleryImageDefinitionName "${{ inputs.image-def-name }}" | 
+          Sort-Object -Property PublishingProfile.PublishedDate -Descending | 
+          Select-Object -First 1).Id
+          
+        if (-not $imageId) {
+          Write-Host "Could not find image in gallery. Validation failed."
+          exit 1
+        }
+
+        Write-Host "Found image ID: $imageId"
+        echo "image-id=$imageId" >> $env:GITHUB_OUTPUT
+
+        # Generate a random password for the VM
+        $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
+        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
+        
+        # Deploy validation VM
+        $vmParams = @{
+          ResourceGroupName = "${{ inputs.validation-rg }}"
+          Name = "${{ inputs.validation-vm-name }}"
+          Location = "${{ inputs.primary-region }}"
+          Credential = New-Object System.Management.Automation.PSCredential ("azureuser", $adminPasswordSecure)
+          Size = "Standard_D2s_v3"
+          SecurityType = "Standard"
+          PublicIpAddressName = "${{ inputs.validation-vm-name }}-pip"
+          OpenPorts = 3389
+        }
+        
+        Write-Host "Deploying validation VM..."
+        
+        # Use the -Image parameter directly instead of ImageId
+        $vm = New-AzVM @vmParams -Image $imageId
+
+        Write-Host "VM deployment completed. Waiting for VM to be ready..."
+
+        # Wait for VM to be ready
+        Start-Sleep -Seconds 60
+
+        # Check VM status
+        $vmStatus = (Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status).Statuses | 
+          Where-Object { $_.Code -like "PowerState/*" } | 
+          Select-Object -ExpandProperty DisplayStatus
+          
+        Write-Host "VM Status: $vmStatus"
+
+        if ($vmStatus -ne "VM running") {
+          Write-Host "VM is not running. Validation failed."
+          exit 1
+        }
+
+        Write-Host "Validation VM deployed and running successfully!"
+
+    # ── Run basic validation tests on VM ───────────────────────
+    - name: Run validation tests
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # We'll use a simple test to verify the VM is responsive
+        $vmStatus = Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status
+        $bootStatus = $vmStatus.Statuses | Where-Object { $_.Code -eq "OSState/generalized" -or $_.Code -eq "OSState/specialized" }
+
+        if ($bootStatus.DisplayStatus -eq "OS state is specialized") {
+          Write-Host "✅ VM is properly specialized (not generalized)"
+        } else {
+          Write-Host "❌ VM is not in the expected state. Found: $($bootStatus.DisplayStatus)"
+          exit 1
+        }
+        
+        Write-Host "✅ Validation tests passed!"
+
+        # Add to summary
+        Write-Output "### ✅ Validation Results" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "* **Validation VM**: ${{ inputs.validation-vm-name }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "* **Resource Group**: ${{ inputs.validation-rg }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "* **Region**: ${{ inputs.primary-region }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "* **VM Status**: Running" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "* **Validation Result**: ✅ Success" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "**Ready for manual testing!** The VM is now available for additional verification." | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "⚠️ **Next Step**: Manual approval will be required before resource cleanup." | Out-File -Append $env:GITHUB_STEP_SUMMARY

@@ -189,10 +189,8 @@ runs:
         Write-Output "* Validation Result: **✅ Success**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
         Write-Output "**⚠️ Manual approval required before cleanup**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
-        Write-Output "Please review the validation results and approve the cleanup step when ready." | Out-File -Append $env:GITHUB_STEP_SUMMARY
-
-    # ── Manual approval before cleanup ──────────────────────────
-    - name: Manual approval before cleanup
+        Write-Output "Please review the validation results and approve the cleanup step when ready." | Out-File -Append $env:GITHUB_STEP_SUMMARY    # ── Manual approval before cleanup ──────────────────────────
+    - name: Display approval information
       shell: pwsh
       run: |
         Write-Host "════════════════════════════════════════════════════════════════"
@@ -209,16 +207,69 @@ runs:
         Write-Host "2. Review the validation results"
         Write-Host "3. Take any necessary screenshots or documentation"
         Write-Host ""
-        Write-Host "When you're ready to proceed with cleanup, manually approve"
-        Write-Host "the next step in the GitHub Actions workflow."
+        Write-Host "The workflow will automatically pause for manual approval."
+        Write-Host "Check the GitHub Actions workflow run for the approval request."
         Write-Host ""
         Write-Host "════════════════════════════════════════════════════════════════"
         
-        # Create a waiting file to indicate approval is needed
-        $waitFile = "$env:RUNNER_TEMP/approval_needed.txt"
-        "Waiting for manual approval to proceed with cleanup" | Out-File $waitFile
-        
-        Write-Host "Workflow will pause here until manual approval is given..."
+        # Add detailed information to the GitHub summary
+        Write-Output "### 🛑 Manual Approval Required" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "The validation VM is ready for manual testing:" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "- **VM Name**: ${{ inputs.validation-vm-name }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "- **Resource Group**: ${{ inputs.validation-rg }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "- **Region**: ${{ inputs.primary-region }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "**Next Steps:**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "1. Connect to the VM for manual testing" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "2. Verify image customizations are working correctly" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "3. Approve the cleanup step when ready" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "⚠️ **The workflow will pause and wait for manual approval before proceeding with cleanup.**" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+    # ── Wait for manual approval ────────────────────────────────
+    - name: Wait for manual approval
+      uses: trstringer/manual-approval@v1
+      with:
+        secret: ${{ github.token }}
+        approvers: ${{ github.actor }}
+        minimum-approvals: 1
+        issue-title: "Manual approval required for VM cleanup - ${{ inputs.validation-vm-name }}"
+        issue-body: |
+          ## 🛑 Manual Approval Required for Resource Cleanup
+          
+          **Validation VM Details:**
+          - **VM Name**: `${{ inputs.validation-vm-name }}`
+          - **Resource Group**: `${{ inputs.validation-rg }}`
+          - **Region**: `${{ inputs.primary-region }}`
+          - **Status**: ✅ VM deployed and validated successfully
+          
+          **What was validated:**
+          - VM deployment completed successfully
+          - VM is running and responsive
+          - OS state is properly specialized (not generalized)
+          
+          **Manual testing opportunities:**
+          - You can now connect to the VM to perform additional testing
+          - Verify custom image configurations are working as expected
+          - Test application functionality and performance
+          - Take screenshots or gather additional documentation
+          
+          **What happens after approval:**
+          - The validation VM will be deleted
+          - Associated network interfaces will be removed
+          - Public IP addresses will be cleaned up
+          - VM disks will be deleted
+          - Resource group will be cleaned up (if temporary)
+          - Image template will be removed
+          
+          **To proceed:**
+          - **Approve**: Comment `approved` on this issue to continue with cleanup
+          - **Deny**: Comment `denied` on this issue to stop the workflow
+          
+          ---
+          *This approval was requested by: @${{ github.actor }}*
+          *Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*
 
     # ── Cleanup resources ─────────────────────────────────────
     - name: Cleanup resources
