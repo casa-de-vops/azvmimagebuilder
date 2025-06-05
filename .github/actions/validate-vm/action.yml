@@ -23,6 +23,10 @@ inputs:
   image-def-name:
     required: true
     description: "The image definition name"
+  validation-kv-name:
+    required: false
+    description: "The name of the Key Vault for storing secrets, if not specified will create one"
+    default: "kvvalidatevm"
   validation-vm-name:
     required: true
     description: "The name for the validation VM"
@@ -141,9 +145,26 @@ runs:
         echo "image-id=$imageId" >> $env:GITHUB_OUTPUT
 
         # Generate a random password for the VM
-        $adminPassword = [System.Guid]::NewGuid().ToString() + "aA1!"
+        $adminPassword = [System.Web.Security.Membership]::GeneratePassword(16, 3)
         $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
-        
+        Write-Host "Random admin password generated."
+
+        # Create key vault if it doesn't exist
+        $keyVaultName = "kv${{ inputs.validation-kv-name }}"
+        $keyVault = Get-AzKeyVault -VaultName $keyVaultName -ErrorAction SilentlyContinue
+
+        if (-not $keyVault) {
+          Write-Host "Creating Key Vault: $keyVaultName"
+          $keyVault = New-AzKeyVault -Name $keyVaultName -ResourceGroupName "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}"
+        } else {
+          Write-Host "Key Vault already exists: $keyVaultName"
+        }
+
+        # Store the admin password in key vault
+        $secretName = "${{ inputs.validation-vm-name }}-admin-password"
+        Write-Host "Storing password in Key Vault as secret: $secretName"
+        Set-AzKeyVaultSecret -VaultName $keyVaultName -Name $secretName -SecretValue $adminPasswordSecure | Out-Null
+                
         # Deploy validation VM
         $vmParams = @{
           ResourceGroupName = "${{ inputs.validation-rg }}"
