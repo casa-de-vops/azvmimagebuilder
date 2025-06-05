@@ -128,7 +128,8 @@ runs:
 
         # Get the latest image version
         $imageId = (Get-AzGalleryImageVersion -ResourceGroupName "${{ inputs.sig-resource-group }}" -GalleryName "${{ inputs.sig-name }}" -GalleryImageDefinitionName "${{ inputs.image-def-name }}" | 
-          Sort-Object -Property PublishingProfile.PublishedDate -Descending | 
+          Where-Object { $_.PublishingProfile.PublishedDate -ne $null -and $_.ProvisioningState -eq "Succeeded" } | 
+          Sort-Object -Property { [datetime]$_.PublishingProfile.PublishedDate } -Descending |
           Select-Object -First 1).Id
           
         if (-not $imageId) {
