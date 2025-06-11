@@ -1,0 +1,76 @@
+{
+  "type": "Microsoft.VirtualMachineImages",
+  "apiVersion": "2019-05-01-preview",
+  "location": "<region1>",
+  "dependsOn": [],
+  "tags": {
+    "imagebuilderTemplate": "AzureImageBuilderSIG",
+    "userIdentity": "enabled"
+  },
+  "identity": {
+    "type": "UserAssigned",
+    "userAssignedIdentities": {
+      "<imgBuilderId>": {}
+    }
+  },
+
+  "properties": {
+    "buildTimeoutInMinutes": 80,
+    "stagingResourceGroup": "<buildRGName>",
+    "vmProfile": {
+      "vmSize": "Standard_D1_v2",
+      "osDiskSizeGB": 50
+    },
+
+    "source": {
+      "type": "PlatformImage",
+      "publisher": "Canonical",
+      "offer": "UbuntuServer",
+      "sku": "18.04-LTS",
+      "version": "latest"
+    },
+    "customize": [
+      {
+        "type": "Shell",
+        "name": "Prepare-and-install-unattended-upgrades",
+        "inline": [
+          "sudo bash -c 'set -euo pipefail && apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unattended-upgrades'"
+        ]
+      },
+      {
+        "type": "Shell",
+        "name": "Install-snapd-and-NotepadPlusPlus",
+        "inline": [
+          "sudo bash -c 'set -euo pipefail && apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends snapd && snap install notepad-plus-plus'"
+        ]
+      },
+      {
+        "type": "File",
+        "name": "downloadBuildArtifacts",
+        "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
+        "destination": "/tmp/index.html"
+      },
+      {
+        "type": "Shell",
+        "name": "setupBuildPath",
+        "inline": [
+          "sudo mkdir /buildArtifacts",
+          "sudo cp /tmp/index.html /buildArtifacts/index.html"
+        ]
+      }
+    ],
+
+    "distribute": [
+      {
+        "type": "SharedImage",
+        "galleryImageId": "/subscriptions/<subscriptionID>/resourceGroups/<rgName>/providers/Microsoft.Compute/galleries/<sharedImageGalName>/images/<imageDefName>",
+        "runOutputName": "<runOutputName>",
+        "artifactTags": {
+          "source": "azureVmImageBuilder",
+          "baseosimg": "ubuntu1804"
+        },
+        "replicationRegions": ["<region1>", "<region2>"]
+      }
+    ]
+  }
+}

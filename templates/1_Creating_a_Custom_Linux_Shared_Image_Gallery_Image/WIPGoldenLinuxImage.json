@@ -1,0 +1,118 @@
+{
+    "type": "Microsoft.VirtualMachineImages",
+    "apiVersion": "2019-05-01-preview",
+    "location": "<region1>",
+    "dependsOn": [],
+    "tags": {
+      "imagebuilderTemplate": "AzureImageBuilderSIG",
+      "userIdentity": "enabled"
+    },
+    "identity": {
+      "type": "UserAssigned",
+      "userAssignedIdentities": {
+        "<imgBuilderId>": {}
+      }
+    },
+  
+    "properties": {
+      "buildTimeoutInMinutes": 80,
+      "stagingResourceGroup": "<buildRGName>",
+      "vmProfile": {
+        "vmSize": "Standard_D1_v2",
+        "osDiskSizeGB": 64
+      },
+  
+      "source": {
+        "type": "PlatformImage",
+        "publisher": "RedHat",
+        "offer": "RHEL",
+        "sku": "8-lvm",
+        "version": "latest"
+      },
+      "customize": [
+        {
+          "type": "Shell",
+          "name": "Prepare-and-enable-dnf-automatic",
+          "inline": [
+            "sudo bash -c 'set -euo pipefail && dnf -y update'",
+            "sudo dnf -y install dnf-automatic",
+            "sudo systemctl enable --now dnf-automatic.timer"
+          ]
+        },
+        {
+          "type": "Shell",
+          "name": "Install-EPEL",
+          "inline": [
+            "sudo dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+            "sudo dnf -y update"
+          ]
+        },
+        {
+          "type": "Shell",
+          "name": "Install-Wine-and-NotepadPP-via-EPEL",
+          "inline": [
+            "sudo dnf -y install wine wget unzip",
+            "wget -O /tmp/npp.zip https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.1/npp.8.8.1.portable.x64.zip",
+            "mkdir -p ~/.wine/drive_c/npp",
+            "unzip /tmp/npp.zip -d ~/.wine/drive_c/npp",
+            "rm -f /tmp/npp.zip"
+          ]
+        },
+        {
+          "type": "Shell",
+          "name": "Install-Azure-Arc-Agent",
+          "inline": [
+            "sudo dnf -y install wget",
+            "wget -q https://aka.ms/InstallAzureArcAgent -O /tmp/InstallAzureArcAgent.sh",
+            "chmod +x /tmp/InstallAzureArcAgent.sh",
+            "sudo /tmp/InstallAzureArcAgent.sh --installOnly",
+            "rm -f /tmp/InstallAzureArcAgent.sh"
+          ]
+        },
+        {
+          "type": "Shell",
+          "name": "Install-Defender-For-Cloud-Agent",
+          "inline": [
+            "sudo dnf -y install wget || sudo yum -y install wget",
+            "wget -q https://raw.githubusercontent.com/Microsoft/OMS-Agent-for-Linux/master/installer/scripts/onboard_agent.sh -O /tmp/onboard_agent.sh",
+            "head -5 /tmp/onboard_agent.sh",
+            "file /tmp/onboard_agent.sh",
+            "if head -1 /tmp/onboard_agent.sh | grep -q '^#!/bin/bash'; then",
+            "  chmod +x /tmp/onboard_agent.sh",
+            "  sudo /tmp/onboard_agent.sh --install",
+            "else",
+            "  echo 'ERROR: Downloaded script is not a valid shell script' >&2",
+            "  exit 1",
+            "fi",
+            "rm -f /tmp/onboard_agent.sh"
+          ]
+        },
+        {
+          "type": "File",
+          "name": "downloadBuildArtifacts",
+          "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
+          "destination": "/tmp/index.html"
+        },
+        {
+          "type": "Shell",
+          "name": "setupBuildPath",
+          "inline": [
+            "sudo mkdir -p /buildArtifacts",
+            "sudo mv /tmp/index.html /buildArtifacts/index.html"
+          ]
+        }
+      ],
+      "distribute": [
+        {
+          "type": "SharedImage",
+          "galleryImageId": "/subscriptions/<subscriptionID>/resourceGroups/<rgName>/providers/Microsoft.Compute/galleries/<sharedImageGalName>/images/<imageDefName>",
+          "runOutputName": "<runOutputName>",
+          "artifactTags": {
+            "source": "azureVmImageBuilder",
+            "baseosimg": "rhel8"
+          },
+          "replicationRegions": ["<region1>", "<region2>"]
+        }
+      ]
+    }
+  }

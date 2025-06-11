@@ -1,0 +1,68 @@
+name: 'Build and Distribute Image'
+description: 'Builds and distributes a custom VM image with Azure Image Builder'
+
+inputs:
+  template-type:
+    required: true
+    description: 'The template type (armTemplate or imageTemplate)'
+  sig-resource-group:
+    required: true
+    description: 'The resource group for the Shared Image Gallery'
+  image-template-name:
+    required: true
+    description: 'The image template name'
+
+runs:
+  using: 'composite'
+  steps:
+    # ── Run Image Build ────────────────────────────────────────
+    - name: Build Image (Image Template)
+      if: inputs.template-type == 'imageTemplate'
+      shell: bash
+      run: |
+        set -euo pipefail
+        
+        az resource invoke-action \
+          --resource-group ${{ inputs.sig-resource-group }} \
+          --resource-type Microsoft.VirtualMachineImages/imageTemplates \
+          -n "${{ inputs.image-template-name }}" \
+          --action Run
+        
+        echo "Image build started. This may take 30+ minutes to complete."
+
+    - name: Build Image (ARM Template)
+      if: inputs.template-type == 'armTemplate'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # Invoke build
+        Invoke-AzResourceAction `
+          -ResourceGroupName ${{ inputs.sig-resource-group }} `
+          -Name              ${{ inputs.image-template-name }} `
+          -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
+          -Action            Run `
+          -ApiVersion        '2022-07-01' `
+          -Force
+
+        # Poll every minute (30 min max)
+        for ($i = 0; $i -lt 30; $i++) {
+          Start-Sleep 60
+          $res = Get-AzResource `
+            -ResourceGroupName ${{ inputs.sig-resource-group }} `
+            -ResourceType      'Microsoft.VirtualMachineImages/imageTemplates' `
+            -Name              ${{ inputs.image-template-name }}
+          $status = $res.Properties.lastRunStatus
+          Write-Host ("{0} → {1}" -f $status.runState, $status.runSubState)
+          if ($status.runState -eq 'Succeeded') { break }
+          if ($status.runState -eq 'Failed')    { throw "Image build failed" }
+          if ($status.runState -eq 'Canceled')  { throw "Image build canceled" }
+        }
+
+    # ── Run summary ─────────────────────────────────────────────
+    - name: Post run summary
+      if: always()
+      shell: bash
+      run: |
+        echo "### Azure Image Builder output" >> "$GITHUB_STEP_SUMMARY"
+        echo "*${{ inputs.template-type }}:* **${{ inputs.image-template-name }}**" >> "$GITHUB_STEP_SUMMARY"

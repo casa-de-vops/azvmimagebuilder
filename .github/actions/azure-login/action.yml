@@ -1,0 +1,24 @@
+name: 'Azure Login'
+description: 'Login to Azure using OIDC'
+
+inputs:
+  client-id:
+    required: true
+    description: 'Azure client ID'
+  tenant-id:
+    required: true
+    description: 'Azure tenant ID'
+  subscription-id:
+    required: true
+    description: 'Azure subscription ID'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Azure login (OIDC)
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+        enable-AzPSSession: true
