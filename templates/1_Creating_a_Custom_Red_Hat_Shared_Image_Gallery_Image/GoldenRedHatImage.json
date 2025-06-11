@@ -59,35 +59,6 @@
           ]
         },
         {
-          "type": "Shell",
-          "name": "Install-Azure-Arc-Agent",
-          "inline": [
-            "sudo dnf -y install wget",
-            "wget -q https://aka.ms/InstallAzureArcAgent -O /tmp/InstallAzureArcAgent.sh",
-            "chmod +x /tmp/InstallAzureArcAgent.sh",
-            "sudo /tmp/InstallAzureArcAgent.sh --installOnly",
-            "rm -f /tmp/InstallAzureArcAgent.sh"
-          ]
-        },
-        {
-          "type": "Shell",
-          "name": "Install-Defender-For-Cloud-Agent",
-          "inline": [
-            "sudo dnf -y install wget || sudo yum -y install wget",
-            "wget -q https://raw.githubusercontent.com/Microsoft/OMS-Agent-for-Linux/master/installer/scripts/onboard_agent.sh -O /tmp/onboard_agent.sh",
-            "head -5 /tmp/onboard_agent.sh",
-            "file /tmp/onboard_agent.sh",
-            "if head -1 /tmp/onboard_agent.sh | grep -q '^#!/bin/bash'; then",
-            "  chmod +x /tmp/onboard_agent.sh",
-            "  sudo /tmp/onboard_agent.sh --install",
-            "else",
-            "  echo 'ERROR: Downloaded script is not a valid shell script' >&2",
-            "  exit 1",
-            "fi",
-            "rm -f /tmp/onboard_agent.sh"
-          ]
-        },
-        {
           "type": "File",
           "name": "downloadBuildArtifacts",
           "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
