@@ -59,6 +59,14 @@
           ]
         },
         {
+          "type": "Shell",
+          "name": "Install-Text-Editors",
+          "inline": [
+            "sudo dnf -y install vim nano gedit",
+            "echo 'Text editors installed: vim, nano, gedit'"
+          ]
+        },
+        {
           "type": "File",
           "name": "downloadBuildArtifacts",
           "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
