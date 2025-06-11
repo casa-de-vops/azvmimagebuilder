@@ -7,7 +7,7 @@ on:
     branches: ["main"] # still limit to main
     paths:
       - "templates/1_Creating_a_Custom_Red_Hat_Shared_Image_Gallery_Image/**" # any file in that folder
-      - ".github/workflows/GoldenRedHatImage.yml" # keep if you really want it
+      - ".github/workflows/GoldenRHELImage.yml" # keep if you really want it
   pull_request: # run on PRs targeting main
     branches: ["main"]
     paths:
@@ -33,7 +33,7 @@ jobs:
     with:
       # === Template Configuration ===
       templateFolder: "1_Creating_a_Custom_Red_Hat_Shared_Image_Gallery_Image"
-      templateName: "GoldenRedHatImage.json"
+      templateName: "GoldenRHELImage.json"
       templateType: "imageTemplate"
 
       # === Azure Resources ===
@@ -43,8 +43,8 @@ jobs:
 
       # === Gallery Configuration ===
       sigName: "appImageGallery"
-      imageDefName: "GoldenRedHatImage"
-      runOutputName: "GoldenRedHatImage"
+      imageDefName: "GoldenRHELImage"
+      runOutputName: "GoldenRHELImage"
 
       # === Location Configuration ===
       location: "westus2"
