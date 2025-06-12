@@ -9,7 +9,7 @@
     "gallerySubscriptionId": { "type": "string" },
     "galleryResourceGroup": { "type": "string" },
     "galleryName": { "type": "string" },
-    "vmSize": { "type": "string", "defaultValue": "Standard_D4s_v5" },
+    "vmSize": { "type": "string" },
     "arcInstallScriptUri": {
       "type": "string",
       "metadata": { "description": "HTTPS URI of the Azure Arc onboarding shell script." }
