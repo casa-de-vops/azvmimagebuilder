@@ -3,58 +3,25 @@
   "contentVersion": "1.1.0.0",
 
   "parameters": {
-    "vmName": {
-      "type": "string",
-      "defaultValue": "golden-rhel-vm"
-    },
-    "adminUsername": {
-      "type": "string",
-      "defaultValue": "azureuser"
-    },
-    "adminPassword": {
-      "type": "secureString",
-      "defaultValue": "P@ssw0rd1234!"
-    },
-    "gallerySubscriptionId": {
-      "type": "string",
-      "defaultValue": "b2c5ab64-1473-483f-a839-ef88914ac0b8"
-    },
-    "galleryResourceGroup": {
-      "type": "string",
-      "defaultValue": "rg-example-westus2-imagebuilder-001"
-    },
-    "galleryName": {
-      "type": "string",
-      "defaultValue": "appImageGallery"
-    },
-    "imageName": {
-      "type": "string",
-      "defaultValue": "GoldenRHELImage",
-      "metadata": { "description": "Name of the image in the Shared Image Gallery." }
-    },
-    "imageVersion": {
-      "type": "string",
-      "defaultValue": "latest",
-      "metadata": { "description": "Version of the image in the Shared Image Gallery (e.g., 'latest' or '1.0.0')." }
-    },
-    "vmSize": {
-      "type": "string",
-      "defaultValue": "Standard_D4s_v5"
-    },
+    "vmName": { "type": "string" },
+    "adminUsername": { "type": "string" },
+    "adminPassword": { "type": "secureString" },
+    "gallerySubscriptionId": { "type": "string" },
+    "galleryResourceGroup": { "type": "string" },
+    "galleryName": { "type": "string" },
+    "vmSize": { "type": "string" },
     "arcInstallScriptUri": {
       "type": "string",
-      "defaultValue": "https://aka.ms/azcmagent-install.sh",
       "metadata": { "description": "HTTPS URI of the Azure Arc onboarding shell script." }
     },
     "subnetId": {
       "type": "string",
-      "defaultValue": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg-networking-vmvalidation-westus2-001/providers/Microsoft.Network/virtualNetworks/vnet-networking-vmvalidation-westus2-001/subnets/snet-networking-vmvalidation-westus2-001",
       "metadata": { "description": "Resource ID of the subnet to attach the VM's network interface to." }
     }
   },
 
   "variables": {
-    "imageId": "[concat('/subscriptions/', parameters('gallerySubscriptionId'), '/resourceGroups/', parameters('galleryResourceGroup'), '/providers/Microsoft.Compute/galleries/', parameters('galleryName'), '/images/', parameters('imageName'), '/versions/', parameters('imageVersion'))]"
+    "imageId": "[concat('/subscriptions/', parameters('gallerySubscriptionId'), '/resourceGroups/', parameters('galleryResourceGroup'), '/providers/Microsoft.Compute/galleries/', parameters('galleryName'), '/images/GoldenRHELImage/versions/latest')]"
   },
 
   "resources": [
