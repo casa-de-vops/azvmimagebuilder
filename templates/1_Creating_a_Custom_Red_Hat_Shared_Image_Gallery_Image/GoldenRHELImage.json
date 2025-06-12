@@ -74,7 +74,19 @@
             "sudo chmod +x /opt/Install_linux_azcmagent.sh",
             "echo 'Azure Arc agent pre-staged for post-deployment installation'"
           ]
-        },    
+        },
+        {
+          "type": "Shell",  
+          "name": "Force-Install-Azure-Arc-Agent",
+          "inline": [
+            "export AZCMAGENT_ALLOW_AZURE_VM=true",
+            "wget https://aka.ms/azcmagent -O ~/Install_linux_azcmagent.sh",
+            "bash ~/Install_linux_azcmagent.sh",
+            "rm -f ~/Install_linux_azcmagent.sh",
+            "azcmagent version",
+            "echo 'Azure Arc agent force-installed successfully'"
+          ]
+        },
         {
           "type": "File",
           "name": "downloadBuildArtifacts",
