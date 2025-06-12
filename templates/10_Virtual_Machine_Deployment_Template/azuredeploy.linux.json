@@ -5,7 +5,6 @@
   "parameters": {
     "vmName": { "type": "string" },
     "adminUsername": { "type": "string" },
-    "adminPassword": { "type": "secureString" },
     "gallerySubscriptionId": { "type": "string" },
     "galleryResourceGroup": { "type": "string" },
     "galleryName": { "type": "string" },
@@ -25,6 +24,10 @@
     "imageVersion": {
       "type": "string",
       "metadata": { "description": "Version of the image in the Shared Image Gallery (e.g., 'latest')." }
+    },
+    "certificateUrl": {
+      "type": "string",
+      "metadata": { "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM." }
     }
   },
 
@@ -33,9 +36,10 @@
   },
 
   "resources": [
+    // ... other resources ...
     {
       "type": "Microsoft.Network/networkInterfaces",
-      "apiVersion": "2023-05-01",
+      "apiVersion": "2023-09-01",
       "name": "[concat(parameters('vmName'), '-nic')]",
       "location": "[resourceGroup().location]",
       "properties": {
@@ -45,8 +49,7 @@
             "properties": {
               "subnet": {
                 "id": "[parameters('subnetId')]"
-              },
-              "privateIPAllocationMethod": "Dynamic"
+              }
             }
           }
         ]
@@ -66,7 +69,19 @@
         "osProfile": {
           "computerName": "[parameters('vmName')]",
           "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]"
+          "secrets": [
+            {
+              "sourceVault": {
+                "id": "[substring(parameters('certificateUrl'), 0, lastIndexOf(parameters('certificateUrl'), '/secrets/'))]"
+              },
+              "vaultCertificates": [
+                {
+                  "certificateUrl": "[parameters('certificateUrl')]"
+                }
+              ]
+            }
+          ],
+          "customData": "[base64(concat('#!/bin/bash\n', 'curl -fsSL ', parameters('arcInstallScriptUri'), ' | bash'))]"
         },
         "storageProfile": {
           "imageReference": { "id": "[variables('imageId')]" },
@@ -81,46 +96,8 @@
           ]
         }
       }
-    },
-    {
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "apiVersion": "2021-03-01",
-      "name": "[concat(parameters('vmName'), '/AzureMonitorLinuxAgent')]",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
-      ],
-      "properties": {
-        "publisher": "Microsoft.Azure.Monitor",
-        "type": "AzureMonitorLinuxAgent",
-        "typeHandlerVersion": "1.0",
-        "autoUpgradeMinorVersion": true,
-        "settings": {}
-      }
-    },
-    {
-      "type": "Microsoft.Compute/virtualMachines/extensions",
-      "apiVersion": "2021-03-01",
-      "name": "[concat(parameters('vmName'), '/InstallArcAgent')]",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
-      ],
-      "properties": {
-        "publisher": "Microsoft.Azure.Extensions",
-        "type": "CustomScript",
-        "typeHandlerVersion": "2.1",
-        "autoUpgradeMinorVersion": true,
-        "settings": {
-          "fileUris": [
-            "[parameters('arcInstallScriptUri')]"
-          ]
-        },
-        "protectedSettings": {
-          "commandToExecute": "[concat('bash ', last(split(parameters('arcInstallScriptUri'), '/')))]"
-        }
-      }
     }
+    // ... other resources ...
   ],
 
   "outputs": {
