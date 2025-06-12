@@ -79,11 +79,12 @@
           "type": "Shell",
           "name": "Install-Azure-Monitor-Agent-for-Defender",
           "inline": [
-            "sudo dnf -y install wget curl",
-            "wget https://aka.ms/AzureMonitorAgent-RHEL8-x64 -O /tmp/azuremonitoragent.rpm",
-            "sudo rpm -ivh /tmp/azuremonitoragent.rpm",
+            "sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc",
+            "sudo sh -c 'echo -e \"[packages-microsoft-com-prod]\\nname=packages-microsoft-com-prod\\nbaseurl=https://packages.microsoft.com/rhel/8/prod/\\nenabled=1\\ngpgcheck=1\\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc\" > /etc/yum.repos.d/microsoft-prod.repo'",
+            "sudo dnf makecache",
+            "sudo dnf install -y azuremonitoragent",
             "sudo systemctl enable azuremonitoragent",
-            "rm -f /tmp/azuremonitoragent.rpm",
+            "sudo systemctl start azuremonitoragent",
             "echo 'Azure Monitor Agent installed and enabled'"
           ]
         },
