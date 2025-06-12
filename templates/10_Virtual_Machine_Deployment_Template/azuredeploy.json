@@ -1,0 +1,107 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.1.0.0",
+
+  "parameters": {
+    "vmName": { "type": "string" },
+    "adminUsername": { "type": "string" },
+    "adminPassword": { "type": "secureString" },
+    "gallerySubscriptionId": { "type": "string" },
+    "galleryResourceGroup": { "type": "string" },
+    "galleryName": { "type": "string" },
+    "networkInterfaceId": { "type": "string" },
+    "vmSize": { "type": "string", "defaultValue": "Standard_D4s_v5" },
+
+    /* NEW – raw URL to the Linux onboarding script you downloaded from
+       Azure Arc (“Install_linux_azcmagent.sh”, or a renamed copy). */
+    "arcInstallScriptUri": {
+      "type": "string",
+      "metadata": { "description": "HTTPS URI of the Azure Arc onboarding shell script." }
+    }
+  },
+
+  "variables": {
+    "imageId": "[concat('/subscriptions/', parameters('gallerySubscriptionId'), '/resourceGroups/', parameters('galleryResourceGroup'), '/providers/Microsoft.Compute/galleries/', parameters('galleryName'), '/images/GoldenRHELImage/versions/latest')]"
+  },
+
+  "resources": [
+    /* 1️⃣ Virtual machine */
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('vmName')]",
+      "location": "[resourceGroup().location]",
+      "identity": { "type": "SystemAssigned" },          // <-- required for AMA
+      "properties": {
+        "hardwareProfile": { "vmSize": "[parameters('vmSize')]" },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]"
+        },
+        "storageProfile": {
+          "imageReference": { "id": "[variables('imageId')]" },
+          "osDisk": {
+            "createOption": "FromImage",
+            "managedDisk": { "storageAccountType": "Premium_LRS" }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            { "id": "[parameters('networkInterfaceId')]" }
+          ]
+        }
+      }
+    },
+
+    /* 2️⃣ Azure Monitor Agent (Linux) */
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2021-03-01",
+      "name": "[concat(parameters('vmName'), '/AzureMonitorLinuxAgent')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Monitor",
+        "type": "AzureMonitorLinuxAgent",
+        "typeHandlerVersion": "1.0",
+        "autoUpgradeMinorVersion": true,
+        "settings": {}           // DCR association done later
+      }
+    },
+
+    /* 3️⃣ Custom Script – install Azure Arc agent */
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2021-03-01",
+      "name": "[concat(parameters('vmName'), '/InstallArcAgent')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ],
+      "properties": {
+        "publisher": "Microsoft.Azure.Extensions",
+        "type": "CustomScript",
+        "typeHandlerVersion": "2.1",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": [
+            "[parameters('arcInstallScriptUri')]"
+          ]
+        },
+        "protectedSettings": {
+          "commandToExecute": "[concat('bash ', last(split(parameters('arcInstallScriptUri'), '/')))]"
+        }
+      }
+    }
+  ],
+
+  "outputs": {
+    "vmResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+    }
+  }
+}
