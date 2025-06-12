@@ -67,6 +67,23 @@
           ]
         },
         {
+          "type": "Shell",
+          "name": "Install-Azure-Arc-Agent",
+          "inline": [
+            "curl -sSL https://download.microsoft.com/download/9/9/c/99c4f75b-d8c6-42b1-9c7d-4b06e5c02b53/install_linux_azcmagent.sh -o /tmp/install_linux_azcmagent.sh",
+            "chmod +x /tmp/install_linux_azcmagent.sh",
+            "sudo /tmp/install_linux_azcmagent.sh --skip-registration",
+            "rm -f /tmp/install_linux_azcmagent.sh",
+            "if command -v azcmagent &> /dev/null; then",
+            "    azcmagent version",
+            "    echo 'Azure Arc agent installed successfully (not connected yet)'",
+            "else",
+            "    echo 'Azure Arc agent installation failed'",
+            "    exit 1",
+            "fi"
+          ]
+        },        
+        {
           "type": "File",
           "name": "downloadBuildArtifacts",
           "sourceUri": "https://raw.githubusercontent.com/danielsollondon/azvmimagebuilder/master/quickquickstarts/exampleArtifacts/buildArtifacts/index.html",
