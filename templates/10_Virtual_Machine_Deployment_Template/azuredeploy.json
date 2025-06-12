@@ -10,9 +10,6 @@
     "galleryResourceGroup": { "type": "string" },
     "galleryName": { "type": "string" },
     "vmSize": { "type": "string", "defaultValue": "Standard_D4s_v5" },
-
-    /* NEW – raw URL to the Linux onboarding script you downloaded from
-       Azure Arc (“Install_linux_azcmagent.sh”, or a renamed copy). */
     "arcInstallScriptUri": {
       "type": "string",
       "metadata": { "description": "HTTPS URI of the Azure Arc onboarding shell script." }
@@ -28,7 +25,6 @@
   },
 
   "resources": [
-    /* Network Interface for the VM */
     {
       "type": "Microsoft.Network/networkInterfaces",
       "apiVersion": "2023-05-01",
@@ -48,8 +44,6 @@
         ]
       }
     },
-
-    /* 1️⃣ Virtual machine */
     {
       "type": "Microsoft.Compute/virtualMachines",
       "apiVersion": "2024-03-01",
@@ -80,8 +74,6 @@
         }
       }
     },
-
-    /* 2️⃣ Azure Monitor Agent (Linux) */
     {
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "apiVersion": "2021-03-01",
@@ -98,8 +90,6 @@
         "settings": {}
       }
     },
-
-    /* 3️⃣ Custom Script – install Azure Arc agent */
     {
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "apiVersion": "2021-03-01",
