@@ -81,10 +81,10 @@
           "name": "Install-Defender-For-Endpoint",
           "inline": [
             "sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc",
-            "sudo tee /etc/yum.repos.d/microsoft-prod.repo > /dev/null << EOF",
-            "[microsoft-prod]",
+            "sudo tee /etc/yum.repos.d/microsoft-mde.repo > /dev/null << 'EOF'",
+            "[microsoft-mde]",
             "name=Microsoft Defender for Endpoint",
-            "baseurl=https://packages.microsoft.com/config/rhel/8/prod.repo",
+            "baseurl=https://packages.microsoft.com/rhel/8/prod/",
             "enabled=1",
             "gpgcheck=1",
             "gpgkey=https://packages.microsoft.com/keys/microsoft.asc",
@@ -92,7 +92,7 @@
             "sudo dnf -y update",
             "sudo dnf -y install mdatp",
             "sudo systemctl enable --now mdatp",
-            "echo 'Microsoft Defender for Endpoint installed and service started.'"
+            "echo 'Microsoft Defender for Endpoint installed and running.'"
           ]
         },
         {
