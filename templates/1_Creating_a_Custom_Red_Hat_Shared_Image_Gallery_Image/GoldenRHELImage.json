@@ -70,35 +70,29 @@
           "type": "Shell",
           "name": "Pre-stage-Azure-Arc-Agent",
           "inline": [
-            "sudo mkdir -p /opt/arc",
-            "sudo wget https://aka.ms/azcmagent -O /opt/arc/install_linux_azcmagent.sh",
-            "sudo chmod +x /opt/arc/install_linux_azcmagent.sh",
-            "sudo /opt/arc/install_linux_azcmagent.sh",
-            "echo 'Azure Arc agent installed to /opt/arc.'"
+            "sudo yum install -y wget",
+            "sudo wget https://aka.ms/azcmagent -O /opt/Install_linux_azcmagent.sh",
+            "sudo chmod +x /opt/Install_linux_azcmagent.sh",
+            "echo 'Azure Arc agent pre-staged for post-deployment installation'"
           ]
         },
         {
           "type": "Shell",
-          "name": "Add-Onboarding-Script-Inline",
+          "name": "Install-Defender-For-Endpoint",
           "inline": [
-            "cat << 'EOF' | sudo tee /opt/arc/onboarding.sh > /dev/null",
-            "#!/bin/bash",
-            "export subscriptionId=\"b2c5ab64-1473-483f-a839-ef88914ac0b8\"",
-            "export resourceGroup=\"rg\"",
-            "export tenantId=\"16b3c013-d300-468d-ac64-7eda0820b6d3\"",
-            "export location=\"westus2\"",
-            "export authType=\"token\"",
-            "export correlationId=\"8ce0bcb1-7273-47d7-b879-4be01ede134f\"",
-            "export cloud=\"AzureCloud\"",
-            "LINUX_INSTALL_SCRIPT=\"/tmp/install_linux_azcmagent.sh\"",
-            "if [ -f \"$LINUX_INSTALL_SCRIPT\" ]; then rm -f \"$LINUX_INSTALL_SCRIPT\"; fi;",
-            "output=$(wget https://gbl.his.arc.azure.com/azcmagent-linux -O \"$LINUX_INSTALL_SCRIPT\" 2>&1);",
-            "echo \"$output\";",
-            "bash \"$LINUX_INSTALL_SCRIPT\";",
-            "sleep 5;",
-            "sudo azcmagent connect --resource-group \"$resourceGroup\" --tenant-id \"$tenantId\" --location \"$location\" --subscription-id \"$subscriptionId\" --cloud \"$cloud\" --correlation-id \"$correlationId\"",
+            "sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc",
+            "sudo tee /etc/yum.repos.d/microsoft-prod.repo > /dev/null << EOF",
+            "[microsoft-prod]",
+            "name=Microsoft Defender for Endpoint",
+            "baseurl=https://packages.microsoft.com/config/rhel/8/prod.repo",
+            "enabled=1",
+            "gpgcheck=1",
+            "gpgkey=https://packages.microsoft.com/keys/microsoft.asc",
             "EOF",
-            "sudo chmod +x /opt/arc/onboarding.sh"
+            "sudo dnf -y update",
+            "sudo dnf -y install mdatp",
+            "sudo systemctl enable --now mdatp",
+            "echo 'Microsoft Defender for Endpoint installed and service started.'"
           ]
         },
         {
