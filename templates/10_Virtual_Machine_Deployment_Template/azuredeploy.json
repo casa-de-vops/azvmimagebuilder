@@ -48,7 +48,7 @@
     },
     "subnetId": {
       "type": "string",
-      "defaultValue": "/subscriptions/<subscription-id>/resourceGroups/<rg-name>/providers/Microsoft.Network/virtualNetworks/<vnet-name>/subnets/<subnet-name>",
+      "defaultValue": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg-networking-vmvalidation-westus2-001/providers/Microsoft.Network/virtualNetworks/vnet-networking-vmvalidation-westus2-001/subnets/snet-networking-vmvalidation-westus2-001",
       "metadata": { "description": "Resource ID of the subnet to attach the VM's network interface to." }
     }
   },
