@@ -1,4 +1,4 @@
-{
+hi{
     "type": "Microsoft.VirtualMachineImages",
     "apiVersion": "2019-05-01-preview",
     "location": "<region1>",
@@ -70,6 +70,7 @@
           "type": "Shell",
           "name": "Pre-stage-Azure-Arc-Agent",
           "inline": [
+            "sudo yum install -y wget",
             "sudo wget https://aka.ms/azcmagent -O /opt/Install_linux_azcmagent.sh",
             "sudo chmod +x /opt/Install_linux_azcmagent.sh",
             "echo 'Azure Arc agent pre-staged for post-deployment installation'"
