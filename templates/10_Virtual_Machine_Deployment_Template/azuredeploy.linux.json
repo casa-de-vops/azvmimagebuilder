@@ -25,6 +25,10 @@
       "type": "string",
       "metadata": { "description": "Version of the image in the Shared Image Gallery (e.g., 'latest')." }
     },
+    "keyVaultId": {
+      "type": "string",
+      "metadata": { "description": "The resource ID of the Key Vault containing the certificate." }
+    },
     "certificateUrl": {
       "type": "string",
       "metadata": { "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM." }
@@ -71,7 +75,7 @@
           "secrets": [
             {
               "sourceVault": {
-                "id": "[substring(parameters('certificateUrl'), 0, lastIndexOf(parameters('certificateUrl'), '/certificates/'))]"
+                "id": "[parameters('keyVaultId')]"
               },
               "vaultCertificates": [
                 {
