@@ -36,7 +36,6 @@
   },
 
   "resources": [
-    // ... other resources ...
     {
       "type": "Microsoft.Network/networkInterfaces",
       "apiVersion": "2023-09-01",
@@ -72,7 +71,7 @@
           "secrets": [
             {
               "sourceVault": {
-                "id": "[substring(parameters('certificateUrl'), 0, lastIndexOf(parameters('certificateUrl'), '/secrets/'))]"
+                "id": "[substring(parameters('certificateUrl'), 0, lastIndexOf(parameters('certificateUrl'), '/certificates/'))]"
               },
               "vaultCertificates": [
                 {
@@ -97,7 +96,6 @@
         }
       }
     }
-    // ... other resources ...
   ],
 
   "outputs": {
