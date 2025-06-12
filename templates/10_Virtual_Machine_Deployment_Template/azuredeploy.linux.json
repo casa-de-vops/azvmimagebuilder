@@ -17,11 +17,19 @@
     "subnetId": {
       "type": "string",
       "metadata": { "description": "Resource ID of the subnet to attach the VM's network interface to." }
+    },
+    "imageName": {
+      "type": "string",
+      "metadata": { "description": "Name of the image in the Shared Image Gallery." }
+    },
+    "imageVersion": {
+      "type": "string",
+      "metadata": { "description": "Version of the image in the Shared Image Gallery (e.g., 'latest')." }
     }
   },
 
   "variables": {
-    "imageId": "[concat('/subscriptions/', parameters('gallerySubscriptionId'), '/resourceGroups/', parameters('galleryResourceGroup'), '/providers/Microsoft.Compute/galleries/', parameters('galleryName'), '/images/GoldenRHELImage/versions/latest')]"
+    "imageId": "[concat('/subscriptions/', parameters('gallerySubscriptionId'), '/resourceGroups/', parameters('galleryResourceGroup'), '/providers/Microsoft.Compute/galleries/', parameters('galleryName'), '/images/', parameters('imageName'), '/versions/', parameters('imageVersion'))]"
   },
 
   "resources": [
