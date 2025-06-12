@@ -76,15 +76,15 @@
           ]
         },
         {
-          "type": "Shell",  
-          "name": "Force-Install-Azure-Arc-Agent",
+          "type": "Shell",
+          "name": "Install-Azure-Monitor-Agent-for-Defender",
           "inline": [
-            "export AZCMAGENT_ALLOW_AZURE_VM=true",
-            "wget https://aka.ms/azcmagent -O ~/Install_linux_azcmagent.sh",
-            "bash ~/Install_linux_azcmagent.sh",
-            "rm -f ~/Install_linux_azcmagent.sh",
-            "azcmagent version",
-            "echo 'Azure Arc agent force-installed successfully'"
+            "sudo dnf -y install wget curl",
+            "wget https://aka.ms/AzureMonitorAgent-RHEL8-x64 -O /tmp/azuremonitoragent.rpm",
+            "sudo rpm -ivh /tmp/azuremonitoragent.rpm",
+            "sudo systemctl enable azuremonitoragent",
+            "rm -f /tmp/azuremonitoragent.rpm",
+            "echo 'Azure Monitor Agent installed and enabled'"
           ]
         },
         {
