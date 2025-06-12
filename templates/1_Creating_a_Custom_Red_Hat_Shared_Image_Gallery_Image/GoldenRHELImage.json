@@ -1,4 +1,4 @@
-hi{
+{
     "type": "Microsoft.VirtualMachineImages",
     "apiVersion": "2019-05-01-preview",
     "location": "<region1>",
