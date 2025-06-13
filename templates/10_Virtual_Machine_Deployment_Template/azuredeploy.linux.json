@@ -66,8 +66,7 @@
       "defaultValue": "GoldenLinuxImage",
       "allowedValues": [
         "GoldenLinuxImage",
-        "GoldenRHELImage",
-        "GoldenWindowsImage"
+        "GoldenRHELImage"
       ],
       "metadata": {
         "description": "Name of the image in the Shared Image Gallery."

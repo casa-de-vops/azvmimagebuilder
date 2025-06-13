@@ -1,0 +1,45 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmName": {
+            "value": "vm-linux-test-001"
+        },
+        "adminUsername": {
+            "value": "azureuser"
+        },
+        "adminPassword": {
+            "value": "YourSecurePassword123!"
+        },
+        "keyVaultId": {
+            "value": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg-keyvault-example-westus2-001/providers/Microsoft.KeyVault/vaults/kv-example-westus2-001"
+        },
+        "certificateUrl": {
+            "value": "https://kv-example-westus2-001.vault.azure.net/secrets/vm-certificate/abcd1234efgh5678ijkl9012mnop3456"
+        },
+        "gallerySubscriptionId": {
+            "value": "b2c5ab64-1473-483f-a839-ef88914ac0b8"
+        },
+        "galleryResourceGroup": {
+            "value": "rg-example-westus2-imagebuilder-001"
+        },
+        "galleryName": {
+            "value": "appImageGallery"
+        },
+        "vmSize": {
+            "value": "Standard_DS2_v2"
+        },
+        "arcInstallScriptUri": {
+            "value": "https://aka.ms/azcmagent-install.sh"
+        },
+        "subnetId": {
+            "value": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg-networking-vmvalidation-westus2-001/providers/Microsoft.Network/virtualNetworks/vnet-networking-vmvalidation-westus2-001/subnets/snet-networking-vmvalidation-westus2-001"
+        },
+        "imageName": {
+            "value": "GoldenLinuxImage"
+        },
+        "imageVersion": {
+            "value": "latest"
+        }
+    }
+}

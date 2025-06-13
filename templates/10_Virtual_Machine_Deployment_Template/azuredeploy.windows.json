@@ -1,0 +1,271 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.1.0.0",
+  "metadata": {
+    "description": "ARM template for deploying Windows Virtual Machines from Shared Image Gallery with password authentication only"
+  },
+  "parameters": {
+    "vmName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the virtual machine"
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "azureuser",
+      "metadata": {
+        "description": "Administrator username for the VM"
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Administrator password for the VM. Must meet Windows complexity requirements."
+      },
+      "minLength": 12
+    },
+    "gallerySubscriptionId": {
+      "type": "string",
+      "defaultValue": "b2c5ab64-1473-483f-a839-ef88914ac0b8",
+      "metadata": {
+        "description": "Subscription ID containing the Shared Image Gallery"
+      }
+    },
+    "galleryResourceGroup": {
+      "type": "string",
+      "defaultValue": "rg-example-westus2-imagebuilder-001",
+      "metadata": {
+        "description": "Resource group containing the Shared Image Gallery"
+      }
+    },
+    "galleryName": {
+      "type": "string",
+      "defaultValue": "appImageGallery",
+      "metadata": {
+        "description": "Name of the Shared Image Gallery"
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_DS2_v2",
+      "allowedValues": [
+        "Standard_DS2_v2",
+        "Standard_DS3_v2",
+        "Standard_DS4_v2",
+        "Standard_B2s",
+        "Standard_B2ms",
+        "Standard_B4ms"
+      ],
+      "metadata": {
+        "description": "Size of the virtual machine"
+      }
+    },
+    "subnetId": {
+      "type": "string",
+      "defaultValue": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg-networking-vmvalidation-westus2-001/providers/Microsoft.Network/virtualNetworks/vnet-networking-vmvalidation-westus2-001/subnets/snet-networking-vmvalidation-westus2-001",
+      "metadata": {
+        "description": "Resource ID of the subnet to attach the VM's network interface to"
+      }
+    },
+    "imageName": {
+      "type": "string",
+      "defaultValue": "GoldenWindowsImage",
+      "allowedValues": [
+        "GoldenWindowsImage"
+
+      ],
+      "metadata": {
+        "description": "Name of the image in the Shared Image Gallery"
+      }
+    },
+    "imageVersion": {
+      "type": "string",
+      "defaultValue": "latest",
+      "metadata": {
+        "description": "Version of the image in the Shared Image Gallery (e.g., 'latest' or specific version like '1.0.0')"
+      }
+    },
+    "enableAutoShutdown": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable automatic shutdown of the VM at a specified time"
+      }
+    },
+    "autoShutdownTime": {
+      "type": "string",
+      "defaultValue": "19:00",
+      "metadata": {
+        "description": "Time for automatic shutdown (24-hour format, e.g., '19:00')"
+      }
+    },
+    "autoShutdownTimeZone": {
+      "type": "string",
+      "defaultValue": "UTC",
+      "metadata": {
+        "description": "Time zone for automatic shutdown"
+      }
+    }
+  },
+  "variables": {
+    "imageId": "[concat('/subscriptions/', parameters('gallerySubscriptionId'), '/resourceGroups/', parameters('galleryResourceGroup'), '/providers/Microsoft.Compute/galleries/', parameters('galleryName'), '/images/', parameters('imageName'), '/versions/', parameters('imageVersion'))]",
+    "nicName": "[concat(parameters('vmName'), '-nic')]",
+    "nsgName": "[concat(parameters('vmName'), '-nsg')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nsgName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "AllowRDP",
+            "properties": {
+              "description": "Allow RDP access",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 1000,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('nicName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+      ],
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[parameters('subnetId')]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('vmName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+      ],
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "windowsConfiguration": {
+            "enableAutomaticUpdates": true,
+            "provisionVMAgent": true,
+            "patchSettings": {
+              "patchMode": "AutomaticByOS",
+              "assessmentMode": "ImageDefault"
+            }
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "id": "[variables('imageId')]"
+          },
+          "osDisk": {
+            "name": "[concat(parameters('vmName'), '-osdisk')]",
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            },
+            "caching": "ReadWrite"
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('enableAutoShutdown')]",
+      "type": "Microsoft.DevTestLab/schedules",
+      "apiVersion": "2018-09-15",
+      "name": "[concat('shutdown-computevm-', parameters('vmName'))]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      ],
+      "properties": {
+        "status": "Enabled",
+        "taskType": "ComputeVmShutdownTask",
+        "dailyRecurrence": {
+          "time": "[parameters('autoShutdownTime')]"
+        },
+        "timeZoneId": "[parameters('autoShutdownTimeZone')]",
+        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+      }
+    }
+  ],
+  "outputs": {
+    "vmResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]",
+      "metadata": {
+        "description": "Resource ID of the created virtual machine"
+      }
+    },
+    "vmName": {
+      "type": "string",
+      "value": "[parameters('vmName')]",
+      "metadata": {
+        "description": "Name of the created virtual machine"
+      }
+    },
+    "privateIPAddress": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))).ipConfigurations[0].properties.privateIPAddress]",
+      "metadata": {
+        "description": "Private IP address of the virtual machine"
+      }
+    },
+    "networkInterfaceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]",
+      "metadata": {
+        "description": "Resource ID of the network interface"
+      }
+    }
+  }
+}
