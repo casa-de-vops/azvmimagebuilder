@@ -2,8 +2,7 @@
 
 Click to launch the Azure portal pre-loaded with this template and parameter file, then fill in or review the required parameters:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcasa-de-vops%2Fazvmimagebuilder%2Frefs%2Fheads%2Fmain%2Ftemplates%2F10_Virtual_Machine_Deployment_Template%2Fazuredeploy.linux.json?parameters-uri=https%3A%2F%2Fraw.githubusercontent.com%2Fcasa-de-vops%2Fazvmimagebuilder%2Frefs%2Fheads%2Fmain%2Ftemplates%2F10_Virtual_Machine_Deployment_Template%2Fazuredeploy.parameters.linux.json)
-
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcasa-de-vops%2Fazvmimagebuilder%2Frefs%2Fheads%2Fmain%2Ftemplates%2F10_Virtual_Machine_Deployment_Template%2Fazuredeploy.linux.json/parametersUri/https%3A%2F%2Fraw.githubusercontent.com%2Fcasa-de-vops%2Fazvmimagebuilder%2Frefs%2Fheads%2Fmain%2Ftemplates%2F10_Virtual_Machine_Deployment_Template%2Fazuredeploy.parameters.linux.json)
 
 ## Deploy the Golden-RHEL VM
 
