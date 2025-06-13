@@ -1,0 +1,197 @@
+name: Deploy VM from Gallery (Clean Orchestrated)
+
+description: |
+  Clean orchestrator workflow for deploying Azure Virtual Machines from Shared Image Gallery.
+  Uses a master composite action that handles all deployment complexity.
+  Supports both Linux and Windows VMs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      vmType:
+        description: 'VM Operating System'
+        required: true
+        default: 'linux'
+        type: choice
+        options:
+        - linux
+        - windows
+      imageName:
+        description: 'Gallery Image Name'
+        required: true
+        default: 'GoldenLinuxImage'
+        type: choice
+        options:
+        - GoldenLinuxImage
+        - GoldenRHELImage
+        - GoldenWindowsImage
+      vmSize:
+        description: 'Virtual Machine Size'
+        required: true
+        default: 'Standard_DS2_v2'
+        type: choice
+        options:
+        - Standard_DS2_v2
+        - Standard_DS3_v2
+        - Standard_DS4_v2
+        - Standard_B2s
+        - Standard_B2ms
+        - Standard_B4ms
+      enableAutoShutdown:
+        description: 'Enable Auto-Shutdown (Windows only)'
+        required: false
+        default: false
+        type: boolean
+      customVmName:
+        description: 'Custom VM Name (leave empty for auto-generated)'
+        required: false
+        type: string
+      enableTesting:
+        description: 'Enable Post-Deployment Testing'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate-and-prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      vm-name: ${{ steps.prepare.outputs.vm-name }}
+      deployment-name: ${{ steps.prepare.outputs.deployment-name }}
+      template-path: ${{ steps.prepare.outputs.template-path }}
+      is-rhel: ${{ steps.prepare.outputs.is-rhel }}
+    steps:
+    - name: Validate and Prepare Deployment
+      id: prepare
+      run: |
+        # Validate image selection
+        if [[ "${{ github.event.inputs.vmType }}" == "linux" ]]; then
+          if [[ "${{ github.event.inputs.imageName }}" == "GoldenWindowsImage" ]]; then
+            echo "❌ Error: Cannot deploy Windows image on Linux VM type"
+            exit 1
+          fi
+        elif [[ "${{ github.event.inputs.vmType }}" == "windows" ]]; then
+          if [[ "${{ github.event.inputs.imageName }}" != "GoldenWindowsImage" ]]; then
+            echo "❌ Error: Cannot deploy Linux/RHEL image on Windows VM type"
+            exit 1
+          fi
+        fi
+        echo "✅ Image selection validated"
+        
+        # Generate VM name
+        if [[ -n "${{ github.event.inputs.customVmName }}" ]]; then
+          VM_NAME="${{ github.event.inputs.customVmName }}"
+        else
+          TIMESTAMP=$(date +%Y%m%d%H%M)
+          VM_NAME="vm-${{ github.event.inputs.environment }}-${{ github.event.inputs.vmType }}-${TIMESTAMP}"
+        fi
+        
+        # Generate deployment name
+        DEPLOYMENT_NAME="deploy-${VM_NAME}-$(date +%Y%m%d%H%M%S)"
+        
+        # Set template path
+        if [[ "${{ github.event.inputs.vmType }}" == "linux" ]]; then
+          TEMPLATE_PATH="./templates/10_Virtual_Machine_Deployment_Template/azuredeploy.linux.json"
+        else
+          TEMPLATE_PATH="./templates/10_Virtual_Machine_Deployment_Template/azuredeploy.windows.json"
+        fi
+        
+        # Check if RHEL deployment
+        IS_RHEL="false"
+        if [[ "${{ github.event.inputs.imageName }}" == "GoldenRHELImage" ]]; then
+          IS_RHEL="true"
+        fi
+        
+        # Set outputs
+        echo "vm-name=${VM_NAME}" >> $GITHUB_OUTPUT
+        echo "deployment-name=${DEPLOYMENT_NAME}" >> $GITHUB_OUTPUT
+        echo "template-path=${TEMPLATE_PATH}" >> $GITHUB_OUTPUT
+        echo "is-rhel=${IS_RHEL}" >> $GITHUB_OUTPUT
+        
+        # Log results
+        echo "🏷️ VM Name: ${VM_NAME}"
+        echo "📋 Deployment Name: ${DEPLOYMENT_NAME}"
+        echo "📄 Template: ${TEMPLATE_PATH}"
+        echo "🔴 RHEL Features: ${IS_RHEL}"
+
+  deploy-vm:
+    runs-on: ubuntu-latest
+    needs: validate-and-prepare
+    environment: ${{ github.event.inputs.environment }}
+    outputs:
+      vm-resource-id: ${{ steps.orchestrate-deployment.outputs.vm-resource-id }}
+      private-ip: ${{ steps.orchestrate-deployment.outputs.private-ip }}
+      deployment-status: ${{ steps.orchestrate-deployment.outputs.deployment-status }}
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Orchestrate VM Deployment
+      id: orchestrate-deployment
+      uses: ./.github/actions/orchestrate-vm-deployment
+      with:
+        # Core VM Configuration
+        vm-name: ${{ needs.validate-and-prepare.outputs.vm-name }}
+        vm-type: ${{ github.event.inputs.vmType }}
+        vm-size: ${{ github.event.inputs.vmSize }}
+        image-name: ${{ github.event.inputs.imageName }}
+        template-path: ${{ needs.validate-and-prepare.outputs.template-path }}
+        
+        # Azure Configuration
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        deployment-name: ${{ needs.validate-and-prepare.outputs.deployment-name }}
+        subnet-id: ${{ secrets.SUBNET_ID }}
+        
+        # Authentication
+        admin-username: ${{ secrets.VM_ADMIN_USERNAME }}
+        admin-password: ${{ secrets.VM_ADMIN_PASSWORD }}
+        keyvault-id: ${{ secrets.KEYVAULT_ID }}
+        certificate-url: ${{ secrets.CERTIFICATE_URL }}
+        
+        # Environment & Features
+        environment: ${{ github.event.inputs.environment }}
+        enable-auto-shutdown: ${{ github.event.inputs.enableAutoShutdown }}
+        enable-testing: ${{ github.event.inputs.enableTesting }}
+        enable-rhel-features: ${{ needs.validate-and-prepare.outputs.is-rhel }}
+        rhel-version: '9'
+
+  cleanup-on-failure:
+    runs-on: ubuntu-latest
+    needs: [validate-and-prepare, deploy-vm]
+    if: always() && failure()
+    steps:
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Orchestrate Cleanup
+      uses: ./.github/actions/orchestrate-vm-cleanup
+      with:
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        vm-name: ${{ needs.validate-and-prepare.outputs.vm-name }}
+        vm-type: ${{ github.event.inputs.vmType }}
+        deployment-name: ${{ needs.validate-and-prepare.outputs.deployment-name }}

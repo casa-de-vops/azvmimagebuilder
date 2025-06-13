@@ -85,27 +85,6 @@
       "metadata": {
         "description": "Version of the image in the Shared Image Gallery (e.g., 'latest' or specific version like '1.0.0')"
       }
-    },
-    "enableAutoShutdown": {
-      "type": "bool",
-      "defaultValue": false,
-      "metadata": {
-        "description": "Enable automatic shutdown of the VM at a specified time"
-      }
-    },
-    "autoShutdownTime": {
-      "type": "string",
-      "defaultValue": "19:00",
-      "metadata": {
-        "description": "Time for automatic shutdown (24-hour format, e.g., '19:00')"
-      }
-    },
-    "autoShutdownTimeZone": {
-      "type": "string",
-      "defaultValue": "UTC",
-      "metadata": {
-        "description": "Time zone for automatic shutdown"
-      }
     }
   },
   "variables": {
@@ -216,25 +195,6 @@
             "enabled": true
           }
         }
-      }
-    },
-    {
-      "condition": "[parameters('enableAutoShutdown')]",
-      "type": "Microsoft.DevTestLab/schedules",
-      "apiVersion": "2018-09-15",
-      "name": "[concat('shutdown-computevm-', parameters('vmName'))]",
-      "location": "[resourceGroup().location]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
-      ],
-      "properties": {
-        "status": "Enabled",
-        "taskType": "ComputeVmShutdownTask",
-        "dailyRecurrence": {
-          "time": "[parameters('autoShutdownTime')]"
-        },
-        "timeZoneId": "[parameters('autoShutdownTimeZone')]",
-        "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
       }
     }
   ],

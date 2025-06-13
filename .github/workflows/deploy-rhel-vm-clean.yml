@@ -1,0 +1,181 @@
+name: Deploy RHEL VM from Gallery
+
+description: |
+  Clean orchestrator workflow for deploying Red Hat Enterprise Linux (RHEL) Virtual Machines.
+  Uses a master composite action that handles all deployment complexity.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      vmSize:
+        description: 'Virtual Machine Size'
+        required: true
+        default: 'Standard_DS2_v2'
+        type: choice
+        options:
+        - Standard_DS2_v2
+        - Standard_DS3_v2
+        - Standard_DS4_v2
+        - Standard_B2s
+        - Standard_B2ms
+        - Standard_B4ms
+        - Standard_E2s_v3
+        - Standard_E4s_v3
+      customVmName:
+        description: 'Custom VM Name (leave empty for auto-generated)'
+        required: false
+        type: string
+      enableTesting:
+        description: 'Enable Post-Deployment Testing'
+        required: false
+        default: true
+        type: boolean
+
+  # Trigger on RHEL image build completion
+  workflow_run:
+    workflows: ["RHEL Build and Distribution"]
+    types:
+      - completed
+    branches: [main]
+
+  # Schedule for automated deployments (weekly testing)
+  schedule:
+    - cron: '0 2 * * 1'  # Every Monday at 2 AM UTC
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  VM_TYPE: 'linux'
+  IMAGE_NAME: 'GoldenRHELImage'
+  RHEL_VERSION: '9'
+
+jobs:
+  validate-and-prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      vm-name: ${{ steps.prepare.outputs.vm-name }}
+      deployment-name: ${{ steps.prepare.outputs.deployment-name }}
+      should-deploy: ${{ steps.prepare.outputs.should-deploy }}
+    steps:
+    - name: Prepare RHEL Deployment
+      id: prepare
+      run: |
+        # Check deployment conditions
+        SHOULD_DEPLOY="true"
+        
+        # Handle workflow_run trigger
+        if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+          if [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
+            echo "❌ Upstream RHEL build failed, skipping deployment"
+            SHOULD_DEPLOY="false"
+          else
+            echo "✅ Upstream RHEL build succeeded, proceeding with deployment"
+          fi
+        fi
+        
+        # Handle manual and scheduled triggers
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
+          echo "✅ Manual or scheduled trigger, proceeding with deployment"
+        fi
+        
+        # Generate VM name
+        if [[ -n "${{ github.event.inputs.customVmName }}" ]]; then
+          VM_NAME="${{ github.event.inputs.customVmName }}"
+        else
+          TIMESTAMP=$(date +%Y%m%d%H%M)
+          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          VM_NAME="vm-${ENVIRONMENT}-rhel${RHEL_VERSION}-${TIMESTAMP}"
+        fi
+        
+        # Generate deployment name
+        DEPLOYMENT_NAME="deploy-rhel-${VM_NAME}-$(date +%Y%m%d%H%M%S)"
+        
+        # Set outputs
+        echo "should-deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+        echo "vm-name=${VM_NAME}" >> $GITHUB_OUTPUT
+        echo "deployment-name=${DEPLOYMENT_NAME}" >> $GITHUB_OUTPUT
+        
+        # Log results
+        echo "🏷️ VM Name: ${VM_NAME}"
+        echo "📋 Deployment Name: ${DEPLOYMENT_NAME}"
+        echo "🎯 Should Deploy: ${SHOULD_DEPLOY}"
+
+  deploy-rhel-vm:
+    runs-on: ubuntu-latest
+    needs: validate-and-prepare
+    if: needs.validate-and-prepare.outputs.should-deploy == 'true'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    outputs:
+      vm-resource-id: ${{ steps.orchestrate-deployment.outputs.vm-resource-id }}
+      private-ip: ${{ steps.orchestrate-deployment.outputs.private-ip }}
+      deployment-status: ${{ steps.orchestrate-deployment.outputs.deployment-status }}
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Orchestrate RHEL VM Deployment
+      id: orchestrate-deployment
+      uses: ./.github/actions/orchestrate-vm-deployment
+      with:
+        # Core VM Configuration
+        vm-name: ${{ needs.validate-and-prepare.outputs.vm-name }}
+        vm-type: ${{ env.VM_TYPE }}
+        vm-size: ${{ github.event.inputs.vmSize || 'Standard_DS2_v2' }}
+        image-name: ${{ env.IMAGE_NAME }}
+        template-path: './templates/10_Virtual_Machine_Deployment_Template/azuredeploy.linux.json'
+        
+        # Azure Configuration
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        deployment-name: ${{ needs.validate-and-prepare.outputs.deployment-name }}
+        subnet-id: ${{ secrets.SUBNET_ID }}
+        
+        # Authentication
+        admin-username: ${{ secrets.VM_ADMIN_USERNAME }}
+        admin-password: ${{ secrets.VM_ADMIN_PASSWORD }}
+        keyvault-id: ${{ secrets.KEYVAULT_ID }}
+        certificate-url: ${{ secrets.CERTIFICATE_URL }}
+        
+        # Environment & Features
+        environment: ${{ github.event.inputs.environment || 'dev' }}
+        enable-testing: ${{ github.event.inputs.enableTesting || 'true' }}
+        enable-rhel-features: 'true'
+        rhel-version: ${{ env.RHEL_VERSION }}
+
+  cleanup-on-failure:
+    runs-on: ubuntu-latest
+    needs: [validate-and-prepare, deploy-rhel-vm]
+    if: always() && failure() && needs.validate-and-prepare.outputs.should-deploy == 'true'
+    steps:
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Orchestrate Cleanup
+      uses: ./.github/actions/orchestrate-vm-cleanup
+      with:
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        vm-name: ${{ needs.validate-and-prepare.outputs.vm-name }}
+        vm-type: ${{ env.VM_TYPE }}
+        deployment-name: ${{ needs.validate-and-prepare.outputs.deployment-name }}
