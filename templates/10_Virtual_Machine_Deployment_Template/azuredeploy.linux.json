@@ -17,7 +17,7 @@
     },
     "adminPassword": {
       "type": "securestring",
-      "required": "false"
+      "defaultValue": "<yourPasswordHere>"
     },
     "gallerySubscriptionId": {
       "type": "string",
