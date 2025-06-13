@@ -3,27 +3,7 @@
   "contentVersion": "1.1.0.0",
   "parameters": {
     "vmName": {
-      "type": "string",
-      "defaultValue": "myLinuxVM",
-      "allowedValues": [
-        "myLinuxVM",
-        "rhelLinuxVM",
-        "windowsVM"
-      ]
-    },
-    "keyVaultId": {
-      "type": "string",
-      "defaultValue": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/sdasfsdfadsfasdfasfasdf",
-      "metadata": {
-        "description": "The resource ID of the Key Vault containing the certificate."
-      }
-    },
-    "certificateUrl": {
-      "type": "string",
-      "defaultValue": "https://sdasfsdfadsfasdfasfasdf.vault.azure.net/secrets/dsa/be59b1876a88413f8f2006ccb356d55b",
-      "metadata": {
-        "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM."
-      }
+      "type": "string"
     },
     "adminUsername": {
       "type": "string",
@@ -33,6 +13,18 @@
       "type": "securestring",
       "defaultValue": "<yourPasswordHere>"
     },
+    "keyVaultId": {
+      "type": "string",
+      "metadata": {
+        "description": "The resource ID of the Key Vault containing the certificate."
+      }
+    },
+    "certificateUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM.  It will be in the format https://<keyvaultname>.vault.azure.net/secrets/dsa/<secretidentifier>"
+      }
+    },    
     "gallerySubscriptionId": {
       "type": "string",
       "defaultValue": "b2c5ab64-1473-483f-a839-ef88914ac0b8"
