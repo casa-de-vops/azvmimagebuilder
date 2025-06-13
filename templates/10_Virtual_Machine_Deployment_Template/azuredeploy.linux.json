@@ -15,10 +15,6 @@
       "type": "string",
       "defaultValue": "azureuser"
     },
-    "adminPassword": {
-      "type": "securestring",
-      "defaultValue": "<yourPasswordHere>"
-    },
     "gallerySubscriptionId": {
       "type": "string",
       "defaultValue": "b2c5ab64-1473-483f-a839-ef88914ac0b8"
@@ -129,7 +125,6 @@
         "osProfile": {
           "computerName": "[parameters('vmName')]",
           "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPassword')]",
           "secrets": [
             {
               "sourceVault": {
