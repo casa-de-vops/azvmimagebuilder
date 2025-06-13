@@ -4,11 +4,19 @@
   "parameters": {
     "vmName": {
       "type": "string",
-      "defaultValue": "myLinuxVM"
+      "defaultValue": "myLinuxVM",
+      "allowedValues": [
+        "myLinuxVM",
+        "rhelLinuxVM",
+        "windowsVM"
+      ]
     },
     "adminUsername": {
       "type": "string",
-      "defaultValue": "azureuser"
+      "defaultValue": "azureuser",
+      "allowedValues": [
+        "azureuser"
+      ]
     },
     "adminPassword": {
       "type": "securestring",
@@ -16,23 +24,38 @@
     },
     "gallerySubscriptionId": {
       "type": "string",
-      "defaultValue": "b2c5ab64-1473-483f-a839-ef88914ac0b8"
+      "defaultValue": "b2c5ab64-1473-483f-a839-ef88914ac0b8",
+      "allowedValues": [
+        "b2c5ab64-1473-483f-a839-ef88914ac0b8"
+      ]
     },
     "galleryResourceGroup": {
       "type": "string",
-      "defaultValue": "rg-example-westus2-imagebuilder-001"
+      "defaultValue": "rg-example-westus2-imagebuilder-001",
+      "allowedValues": [
+        "rg-example-westus2-imagebuilder-001"
+      ]
     },
     "galleryName": {
       "type": "string",
-      "defaultValue": "appImageGallery"
+      "defaultValue": "appImageGallery",
+      "allowedValues": [
+        "appImageGallery"
+      ]
     },
     "vmSize": {
       "type": "string",
-      "defaultValue": "Standard_DS2_v2"
+      "defaultValue": "Standard_DS2_v2",
+      "allowedValues": [
+        "Standard_DS2_v2"
+      ]
     },
     "arcInstallScriptUri": {
       "type": "string",
       "defaultValue": "https://aka.ms/azcmagent-install.sh",
+      "allowedValues": [
+        "https://aka.ms/azcmagent-install.sh"
+      ],
       "metadata": {
         "description": "HTTPS URI of the Azure Arc onboarding shell script."
       }
@@ -40,6 +63,9 @@
     "subnetId": {
       "type": "string",
       "defaultValue": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg-networking-vmvalidation-westus2-001/providers/Microsoft.Network/virtualNetworks/vnet-networking-vmvalidation-westus2-001/subnets/snet-networking-vmvalidation-westus2-001",
+      "allowedValues": [
+        "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg-networking-vmvalidation-westus2-001/providers/Microsoft.Network/virtualNetworks/vnet-networking-vmvalidation-westus2-001/subnets/snet-networking-vmvalidation-westus2-001"
+      ],
       "metadata": {
         "description": "Resource ID of the subnet to attach the VM's network interface to."
       }
@@ -47,6 +73,11 @@
     "imageName": {
       "type": "string",
       "defaultValue": "GoldenLinuxImage",
+      "allowedValues": [
+        "GoldenLinuxImage",
+        "GoldenRHELImage",
+        "GoldenWindowsImage"
+      ],
       "metadata": {
         "description": "Name of the image in the Shared Image Gallery."
       }
@@ -54,6 +85,9 @@
     "imageVersion": {
       "type": "string",
       "defaultValue": "latest",
+      "allowedValues": [
+        "latest"
+      ],
       "metadata": {
         "description": "Version of the image in the Shared Image Gallery (e.g., 'latest')."
       }
@@ -61,6 +95,9 @@
     "keyVaultId": {
       "type": "string",
       "defaultValue": "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/sdasfsdfadsfasdfasfasdf",
+      "allowedValues": [
+        "/subscriptions/b2c5ab64-1473-483f-a839-ef88914ac0b8/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/sdasfsdfadsfasdfasfasdf"
+      ],
       "metadata": {
         "description": "The resource ID of the Key Vault containing the certificate."
       }
@@ -68,6 +105,9 @@
     "certificateUrl": {
       "type": "string",
       "defaultValue": "https://sdasfsdfadsfasdfasfasdf.vault.azure.net/certificates/dsa/f586579883dc400c835ad975f70093b8",
+      "allowedValues": [
+        "https://sdasfsdfadsfasdfasfasdf.vault.azure.net/certificates/dsa/f586579883dc400c835ad975f70093b8"
+      ],
       "metadata": {
         "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM."
       }
