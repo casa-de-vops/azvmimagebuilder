@@ -1,0 +1,48 @@
+name: 'VM Deployment Cleanup Orchestrator'
+description: 'Orchestrates cleanup of failed VM deployments with comprehensive error handling'
+
+inputs:
+  resource-group:
+    description: 'Target resource group name'
+    required: true
+  vm-name:
+    description: 'Virtual machine name to cleanup'
+    required: true
+  vm-type:
+    description: 'VM type (linux or windows)'
+    required: true
+  deployment-name:
+    description: 'Deployment name for tracking'
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Initialize Cleanup
+      shell: bash
+      run: |
+        echo "🧹 Starting VM Deployment Cleanup Orchestration..."
+        echo "- VM Name: ${{ inputs.vm-name }}"
+        echo "- VM Type: ${{ inputs.vm-type }}"
+        echo "- Resource Group: ${{ inputs.resource-group }}"
+        if [[ -n "${{ inputs.deployment-name }}" ]]; then
+          echo "- Deployment: ${{ inputs.deployment-name }}"
+        fi
+
+    - name: Cleanup Failed VM Deployment
+      uses: ./.github/actions/cleanup-failed-vm-deployment
+      with:
+        resource-group: ${{ inputs.resource-group }}
+        vm-name: ${{ inputs.vm-name }}
+        vm-type: ${{ inputs.vm-type }}
+
+    - name: Log Cleanup Results
+      shell: bash
+      run: |
+        echo "## 🧹 Cleanup Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Name**: ${{ inputs.vm-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Resource Group**: ${{ inputs.resource-group }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Cleanup Time**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status**: Cleanup completed" >> $GITHUB_STEP_SUMMARY
+        
+        echo "✅ VM deployment cleanup orchestration completed"

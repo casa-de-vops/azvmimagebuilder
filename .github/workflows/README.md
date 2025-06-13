@@ -11,7 +11,7 @@ This repository provides comprehensive workflows for building and deploying cust
 - `template.yaml` - Reusable template workflow
 
 ### 2. VM Deployment Workflow
-- `deploy-vm.yml` - Deploys VMs from Shared Image Gallery images
+- `deploy-rhel-vm.yml` - Orchestrated RHEL VM deployment from Shared Image Gallery
 
 ## Current Architecture
 
@@ -24,11 +24,14 @@ The primary reusable workflow that orchestrates the entire image building proces
 - Supports both ARM templates and Image Builder templates
 - Provides built-in validation through VM deployment testing
 
-### VM Deployment Workflow (`deploy-vm.yml`)
-A dedicated workflow for deploying VMs from pre-built gallery images. This workflow:
-- 🔒 **Secure deployment** using repository secrets
-- 🐧 **Linux VM support** with certificate-based authentication and Azure Arc
-- 🪟 **Windows VM support** with password authentication and auto-shutdown
+### Orchestrated VM Deployment Workflow (`deploy-rhel-vm.yml`)
+A clean trigger workflow that orchestrates RHEL VM deployments using composite actions. This workflow:
+- 🎯 **Clean orchestration** - All complexity handled by composite actions
+- 🔒 **OIDC authentication** - Modern Azure authentication without service principal JSON
+- 🐧 **RHEL-specific features** - Specialized for Red Hat Enterprise Linux deployments
+- 🚀 **Multiple triggers** - Manual, scheduled, and image build completion triggers
+- 🧪 **Built-in testing** - Post-deployment validation and connectivity testing
+- 🔄 **Automated cleanup** - Failure recovery with resource cleanup
 - 🔍 **Pre-deployment validation** with what-if analysis
 - 🧹 **Automatic cleanup** on deployment failures
 - 📊 **Comprehensive reporting** with deployment summaries

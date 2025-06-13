@@ -35,9 +35,9 @@ The Azure VM deployment workflows have been successfully modularized into reusab
    - VM, NIC, and NSG resource cleanup
    - Asynchronous cleanup operations
 
-### 🚀 **Workflows**
+### 🚀 **Workflow**
 
-1. **`deploy-rhel-vm.yml`** ✅ - **RHEL-Specific Deployment**
+1. **`deploy-rhel-vm.yml`** ✅ - **Consolidated Orchestrated VM Deployment**
    - **Triggers**: Manual, workflow_run, scheduled (weekly)
    - **Features**:
      - ✅ RHEL 9 golden image deployment
@@ -47,8 +47,8 @@ The Azure VM deployment workflows have been successfully modularized into reusab
      - ✅ Integration testing capabilities
      - ✅ OIDC authentication
      - ✅ Environment-based approvals
-
-2. **`deploy-vm-modular.yml`** ✅ - **General VM Deployment**
+     - ✅ Clean orchestrated architecture
+     - ✅ All deployment complexity encapsulated in composite actions
    - **Triggers**: Manual workflow dispatch
    - **Features**:
      - ✅ Support for Linux/Windows VMs
