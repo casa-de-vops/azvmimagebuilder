@@ -83,7 +83,7 @@
     },
     "certificateUrl": {
       "type": "string",
-      "defaultValue": "https://sdasfsdfadsfasdfasfasdf.vault.azure.net/certificates/dsa/f586579883dc400c835ad975f70093b8",
+      "defaultValue": "https://sdasfsdfadsfasdfasfasdf.vault.azure.net/secrets/dsa/f586579883dc400c835ad975f70093b8",
       "metadata": {
         "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM."
       }
