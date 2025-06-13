@@ -1,44 +1,68 @@
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.1.0.0",
-
   "parameters": {
-    "vmName": { "type": "string" },
-    "adminUsername": { "type": "string" },
-    "gallerySubscriptionId": { "type": "string" },
-    "galleryResourceGroup": { "type": "string" },
-    "galleryName": { "type": "string" },
-    "vmSize": { "type": "string" },
+    "vmName": {
+      "type": "string"
+    },
+    "adminUsername": {
+      "type": "string"
+    },
+    "adminPassword": {
+      "type": "securestring"
+    },
+    "gallerySubscriptionId": {
+      "type": "string"
+    },
+    "galleryResourceGroup": {
+      "type": "string"
+    },
+    "galleryName": {
+      "type": "string"
+    },
+    "vmSize": {
+      "type": "string"
+    },
     "arcInstallScriptUri": {
       "type": "string",
-      "metadata": { "description": "HTTPS URI of the Azure Arc onboarding shell script." }
+      "metadata": {
+        "description": "HTTPS URI of the Azure Arc onboarding shell script."
+      }
     },
     "subnetId": {
       "type": "string",
-      "metadata": { "description": "Resource ID of the subnet to attach the VM's network interface to." }
+      "metadata": {
+        "description": "Resource ID of the subnet to attach the VM's network interface to."
+      }
     },
     "imageName": {
       "type": "string",
-      "metadata": { "description": "Name of the image in the Shared Image Gallery." }
+      "metadata": {
+        "description": "Name of the image in the Shared Image Gallery."
+      }
     },
     "imageVersion": {
       "type": "string",
-      "metadata": { "description": "Version of the image in the Shared Image Gallery (e.g., 'latest')." }
+      "metadata": {
+        "description": "Version of the image in the Shared Image Gallery (e.g., 'latest')."
+      }
     },
     "keyVaultId": {
       "type": "string",
-      "metadata": { "description": "The resource ID of the Key Vault containing the certificate." }
+      "metadata": {
+        "description": "The resource ID of the Key Vault containing the certificate."
+      }
     },
     "certificateUrl": {
       "type": "string",
-      "metadata": { "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM." }
+      "metadata": {
+        "description": "The Key Vault secret ID (URI) for the certificate to inject into the VM."
+      }
     }
   },
-
   "variables": {
     "imageId": "[concat('/subscriptions/', parameters('gallerySubscriptionId'), '/resourceGroups/', parameters('galleryResourceGroup'), '/providers/Microsoft.Compute/galleries/', parameters('galleryName'), '/images/', parameters('imageName'), '/versions/', parameters('imageVersion'))]"
   },
-
   "resources": [
     {
       "type": "Microsoft.Network/networkInterfaces",
@@ -63,15 +87,20 @@
       "apiVersion": "2024-03-01",
       "name": "[parameters('vmName')]",
       "location": "[resourceGroup().location]",
-      "identity": { "type": "SystemAssigned" },
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "dependsOn": [
         "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmName'), '-nic'))]"
       ],
       "properties": {
-        "hardwareProfile": { "vmSize": "[parameters('vmSize')]" },
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
         "osProfile": {
           "computerName": "[parameters('vmName')]",
           "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
           "secrets": [
             {
               "sourceVault": {
@@ -87,21 +116,26 @@
           "customData": "[base64(concat('#!/bin/bash\n', 'curl -fsSL ', parameters('arcInstallScriptUri'), ' | bash'))]"
         },
         "storageProfile": {
-          "imageReference": { "id": "[variables('imageId')]" },
+          "imageReference": {
+            "id": "[variables('imageId')]"
+          },
           "osDisk": {
             "createOption": "FromImage",
-            "managedDisk": { "storageAccountType": "Premium_LRS" }
+            "managedDisk": {
+              "storageAccountType": "Premium_LRS"
+            }
           }
         },
         "networkProfile": {
           "networkInterfaces": [
-            { "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmName'), '-nic'))]" }
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('vmName'), '-nic'))]"
+            }
           ]
         }
       }
     }
   ],
-
   "outputs": {
     "vmResourceId": {
       "type": "string",
