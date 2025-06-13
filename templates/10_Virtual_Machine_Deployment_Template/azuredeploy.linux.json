@@ -16,7 +16,8 @@
       "defaultValue": "azureuser"
     },
     "adminPassword": {
-      "type": "securestring"
+      "type": "securestring",
+      "required": "false"
     },
     "gallerySubscriptionId": {
       "type": "string",
