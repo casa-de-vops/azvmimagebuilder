@@ -1,0 +1,143 @@
+name: 'Deploy Azure VM'
+description: 'Deploys Azure VM using ARM template'
+inputs:
+  template-path:
+    description: 'Path to the ARM template file'
+    required: true
+  resource-group:
+    description: 'Target resource group name'
+    required: true
+  deployment-name:
+    description: 'Name for the deployment'
+    required: true
+  subscription-id:
+    description: 'Azure subscription ID'
+    required: true
+  vm-type:
+    description: 'VM type (linux or windows)'
+    required: true
+  vm-name:
+    description: 'Virtual machine name'
+    required: true
+  admin-username:
+    description: 'VM administrator username'
+    required: true
+  admin-password:
+    description: 'VM administrator password'
+    required: true
+  subnet-id:
+    description: 'Subnet resource ID'
+    required: true
+  image-name:
+    description: 'Gallery image name'
+    required: true
+  vm-size:
+    description: 'Virtual machine size'
+    required: true
+  keyvault-id:
+    description: 'Key Vault resource ID (Linux only)'
+    required: false
+  certificate-url:
+    description: 'Certificate URL from Key Vault (Linux only)'
+    required: false
+  enable-auto-shutdown:
+    description: 'Enable auto-shutdown (Windows only)'
+    required: false
+    default: 'false'
+
+outputs:
+  vm-resource-id:
+    description: 'Resource ID of the deployed VM'
+    value: ${{ steps.get-outputs.outputs.vm-resource-id }}
+  vm-name:
+    description: 'Name of the deployed VM'
+    value: ${{ steps.get-outputs.outputs.vm-name }}
+  private-ip:
+    description: 'Private IP address of the VM'
+    value: ${{ steps.get-outputs.outputs.private-ip }}
+  network-interface-id:
+    description: 'Network interface resource ID'
+    value: ${{ steps.get-outputs.outputs.network-interface-id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy Linux VM
+      if: inputs.vm-type == 'linux'
+      uses: azure/arm-deploy@v2
+      id: deploy-linux
+      with:
+        scope: resourcegroup
+        subscriptionId: ${{ inputs.subscription-id }}
+        resourceGroupName: ${{ inputs.resource-group }}
+        template: ${{ inputs.template-path }}
+        deploymentName: ${{ inputs.deployment-name }}
+        parameters: >
+          vmName=${{ inputs.vm-name }}
+          adminUsername=${{ inputs.admin-username }}
+          adminPassword=${{ inputs.admin-password }}
+          keyVaultId=${{ inputs.keyvault-id }}
+          certificateUrl=${{ inputs.certificate-url }}
+          subnetId=${{ inputs.subnet-id }}
+          imageName=${{ inputs.image-name }}
+          vmSize=${{ inputs.vm-size }}
+        failOnStdErr: false
+
+    - name: Deploy Windows VM
+      if: inputs.vm-type == 'windows'
+      uses: azure/arm-deploy@v2
+      id: deploy-windows
+      with:
+        scope: resourcegroup
+        subscriptionId: ${{ inputs.subscription-id }}
+        resourceGroupName: ${{ inputs.resource-group }}
+        template: ${{ inputs.template-path }}
+        deploymentName: ${{ inputs.deployment-name }}
+        parameters: >
+          vmName=${{ inputs.vm-name }}
+          adminUsername=${{ inputs.admin-username }}
+          adminPassword=${{ inputs.admin-password }}
+          subnetId=${{ inputs.subnet-id }}
+          imageName=${{ inputs.image-name }}
+          vmSize=${{ inputs.vm-size }}
+          enableAutoShutdown=${{ inputs.enable-auto-shutdown }}
+        failOnStdErr: false
+
+    - name: Get Deployment Outputs
+      id: get-outputs
+      shell: bash
+      run: |
+        echo "📋 Retrieving deployment outputs..."
+        
+        # Get deployment outputs
+        DEPLOYMENT_OUTPUTS=$(az deployment group show \
+          --resource-group "${{ inputs.resource-group }}" \
+          --name "${{ inputs.deployment-name }}" \
+          --query 'properties.outputs' \
+          --output json)
+        
+        # Extract specific outputs
+        if command -v jq &> /dev/null && [[ "${DEPLOYMENT_OUTPUTS}" != "null" ]]; then
+          VM_RESOURCE_ID=$(echo "${DEPLOYMENT_OUTPUTS}" | jq -r '.vmResourceId.value // empty')
+          VM_NAME=$(echo "${DEPLOYMENT_OUTPUTS}" | jq -r '.vmName.value // empty')
+          PRIVATE_IP=$(echo "${DEPLOYMENT_OUTPUTS}" | jq -r '.privateIPAddress.value // empty')
+          NIC_ID=$(echo "${DEPLOYMENT_OUTPUTS}" | jq -r '.networkInterfaceId.value // empty')
+          
+          echo "vm-resource-id=${VM_RESOURCE_ID}" >> $GITHUB_OUTPUT
+          echo "vm-name=${VM_NAME}" >> $GITHUB_OUTPUT
+          echo "private-ip=${PRIVATE_IP}" >> $GITHUB_OUTPUT
+          echo "network-interface-id=${NIC_ID}" >> $GITHUB_OUTPUT
+          
+          echo "✅ Deployment outputs retrieved successfully"
+        else
+          echo "⚠️ Could not parse deployment outputs"
+        fi
+
+    - name: Display Deployment Success
+      shell: bash
+      run: |
+        echo "🎉 VM Deployment Completed Successfully!"
+        echo "VM Name: ${{ inputs.vm-name }}"
+        echo "VM Type: ${{ inputs.vm-type }}"
+        echo "Image: ${{ inputs.image-name }}"
+        echo "Size: ${{ inputs.vm-size }}"

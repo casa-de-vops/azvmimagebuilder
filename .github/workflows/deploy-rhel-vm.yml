@@ -1,0 +1,281 @@
+name: Deploy RHEL VM from Gallery
+
+description: |
+  This workflow deploys Red Hat Enterprise Linux (RHEL) Virtual Machines from Shared Image Gallery.
+  It uses modular composite actions for validation, deployment, and cleanup.
+  Specifically designed for RHEL golden image deployments with enterprise features.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+      vmSize:
+        description: 'Virtual Machine Size'
+        required: true
+        default: 'Standard_DS2_v2'
+        type: choice
+        options:
+        - Standard_DS2_v2
+        - Standard_DS3_v2
+        - Standard_DS4_v2
+        - Standard_B2s
+        - Standard_B2ms
+        - Standard_B4ms
+        - Standard_E2s_v3
+        - Standard_E4s_v3
+      customVmName:
+        description: 'Custom VM Name (leave empty for auto-generated)'
+        required: false
+        type: string
+      deploymentRegion:
+        description: 'Azure Region for Deployment'
+        required: false
+        default: 'westus2'
+        type: choice
+        options:
+        - westus2
+        - eastus
+        - eastus2
+        - centralus
+        - northcentralus
+        - southcentralus
+        - westcentralus
+        - westus
+        - westus3
+
+  # Trigger on RHEL image build completion
+  workflow_run:
+    workflows: ["RHEL Build and Distribution"]
+    types:
+      - completed
+    branches: [main]
+
+  # Schedule for automated deployments (e.g., weekly testing)
+  schedule:
+    - cron: '0 2 * * 1'  # Every Monday at 2 AM UTC
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  VM_TYPE: 'linux'
+  IMAGE_NAME: 'GoldenRHELImage'
+  RHEL_VERSION: '9'
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      vm-name: ${{ steps.generate-name.outputs.vm-name }}
+      deployment-name: ${{ steps.generate-name.outputs.deployment-name }}
+      template-path: ${{ steps.set-template.outputs.template-path }}
+      should-deploy: ${{ steps.check-trigger.outputs.should-deploy }}
+    steps:
+    - name: Check Trigger Conditions
+      id: check-trigger
+      run: |
+        SHOULD_DEPLOY="true"
+        
+        # Check if triggered by workflow_run and if it was successful
+        if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+          if [[ "${{ github.event.workflow_run.conclusion }}" != "success" ]]; then
+            echo "❌ Upstream workflow failed, skipping deployment"
+            SHOULD_DEPLOY="false"
+          else
+            echo "✅ Upstream RHEL build completed successfully, proceeding with deployment"
+          fi
+        fi
+        
+        # For manual and scheduled runs, always deploy
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "schedule" ]]; then
+          echo "✅ Manual or scheduled trigger, proceeding with deployment"
+        fi
+        
+        echo "should-deploy=${SHOULD_DEPLOY}" >> $GITHUB_OUTPUT
+
+    - name: Generate VM Name and Deployment Name
+      id: generate-name
+      if: steps.check-trigger.outputs.should-deploy == 'true'
+      run: |
+        if [[ -n "${{ github.event.inputs.customVmName }}" ]]; then
+          VM_NAME="${{ github.event.inputs.customVmName }}"
+        else
+          TIMESTAMP=$(date +%Y%m%d%H%M)
+          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          VM_NAME="vm-${ENVIRONMENT}-rhel${RHEL_VERSION}-${TIMESTAMP}"
+        fi
+        
+        DEPLOYMENT_NAME="deploy-rhel-${VM_NAME}-$(date +%Y%m%d%H%M%S)"
+        
+        echo "vm-name=${VM_NAME}" >> $GITHUB_OUTPUT
+        echo "deployment-name=${DEPLOYMENT_NAME}" >> $GITHUB_OUTPUT
+        
+        echo "🏷️ Generated VM Name: ${VM_NAME}"
+        echo "📋 Generated Deployment Name: ${DEPLOYMENT_NAME}"
+
+    - name: Set Template Path
+      id: set-template
+      if: steps.check-trigger.outputs.should-deploy == 'true'
+      run: |
+        TEMPLATE_PATH="./templates/10_Virtual_Machine_Deployment_Template/azuredeploy.linux.json"
+        echo "template-path=${TEMPLATE_PATH}" >> $GITHUB_OUTPUT
+        echo "📄 Using template: ${TEMPLATE_PATH}"
+
+  deploy-rhel-vm:
+    runs-on: ubuntu-latest
+    needs: validate-inputs
+    if: needs.validate-inputs.outputs.should-deploy == 'true'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Validate Azure Resources
+      uses: ./.github/actions/validate-azure-resources
+      with:
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        subnet-id: ${{ secrets.SUBNET_ID }}
+        keyvault-id: ${{ secrets.KEYVAULT_ID }}
+        vm-type: ${{ env.VM_TYPE }}
+
+    - name: Validate ARM Template
+      uses: ./.github/actions/validate-arm-template
+      with:
+        template-path: ${{ needs.validate-inputs.outputs.template-path }}
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        deployment-name: ${{ needs.validate-inputs.outputs.deployment-name }}
+        vm-type: ${{ env.VM_TYPE }}
+        vm-name: ${{ needs.validate-inputs.outputs.vm-name }}
+        admin-username: ${{ secrets.VM_ADMIN_USERNAME }}
+        admin-password: ${{ secrets.VM_ADMIN_PASSWORD }}
+        subnet-id: ${{ secrets.SUBNET_ID }}
+        image-name: ${{ env.IMAGE_NAME }}
+        vm-size: ${{ github.event.inputs.vmSize || 'Standard_DS2_v2' }}
+        keyvault-id: ${{ secrets.KEYVAULT_ID }}
+        certificate-url: ${{ secrets.CERTIFICATE_URL }}
+
+    - name: Deploy RHEL VM
+      id: deploy-vm
+      uses: ./.github/actions/deploy-azure-vm
+      with:
+        template-path: ${{ needs.validate-inputs.outputs.template-path }}
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        deployment-name: ${{ needs.validate-inputs.outputs.deployment-name }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        vm-type: ${{ env.VM_TYPE }}
+        vm-name: ${{ needs.validate-inputs.outputs.vm-name }}
+        admin-username: ${{ secrets.VM_ADMIN_USERNAME }}
+        admin-password: ${{ secrets.VM_ADMIN_PASSWORD }}
+        subnet-id: ${{ secrets.SUBNET_ID }}
+        image-name: ${{ env.IMAGE_NAME }}
+        vm-size: ${{ github.event.inputs.vmSize || 'Standard_DS2_v2' }}
+        keyvault-id: ${{ secrets.KEYVAULT_ID }}
+        certificate-url: ${{ secrets.CERTIFICATE_URL }}
+
+    - name: Generate Deployment Report
+      uses: ./.github/actions/generate-deployment-report
+      with:
+        environment: ${{ github.event.inputs.environment || 'dev' }}
+        vm-type: ${{ env.VM_TYPE }}
+        vm-name: ${{ needs.validate-inputs.outputs.vm-name }}
+        image-name: ${{ env.IMAGE_NAME }}
+        vm-size: ${{ github.event.inputs.vmSize || 'Standard_DS2_v2' }}
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        deployment-name: ${{ needs.validate-inputs.outputs.deployment-name }}
+        vm-resource-id: ${{ steps.deploy-vm.outputs.vm-resource-id }}
+        private-ip: ${{ steps.deploy-vm.outputs.private-ip }}
+        network-interface-id: ${{ steps.deploy-vm.outputs.network-interface-id }}
+
+    - name: RHEL-Specific Post-Deployment Tasks
+      run: |
+        echo "🔴 RHEL VM Deployment Completed!"
+        echo ""
+        echo "### RHEL-Specific Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **RHEL Version**: ${{ env.RHEL_VERSION }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Red Hat Subscription**: Configured in golden image" >> $GITHUB_STEP_SUMMARY
+        echo "- **SELinux**: Enabled by default" >> $GITHUB_STEP_SUMMARY
+        echo "- **Firewall**: Firewalld enabled by default" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### RHEL Management Commands" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "# Check RHEL version" >> $GITHUB_STEP_SUMMARY
+        echo "cat /etc/redhat-release" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Check subscription status" >> $GITHUB_STEP_SUMMARY
+        echo "sudo subscription-manager status" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Update packages" >> $GITHUB_STEP_SUMMARY
+        echo "sudo dnf update -y" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Check SELinux status" >> $GITHUB_STEP_SUMMARY
+        echo "sestatus" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  cleanup-on-failure:
+    runs-on: ubuntu-latest
+    needs: [validate-inputs, deploy-rhel-vm]
+    if: always() && failure() && needs.validate-inputs.outputs.should-deploy == 'true'
+    steps:
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Cleanup Failed RHEL Deployment
+      uses: ./.github/actions/cleanup-failed-vm-deployment
+      with:
+        resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+        vm-name: ${{ needs.validate-inputs.outputs.vm-name }}
+        vm-type: ${{ env.VM_TYPE }}
+
+  # Optional: Integration testing job
+  test-rhel-vm:
+    runs-on: ubuntu-latest
+    needs: [validate-inputs, deploy-rhel-vm]
+    if: success() && (github.event.inputs.environment == 'dev' || github.event_name == 'schedule')
+    steps:
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Test RHEL VM Connectivity
+      run: |
+        echo "🧪 Testing RHEL VM connectivity and basic functionality..."
+        
+        VM_NAME="${{ needs.validate-inputs.outputs.vm-name }}"
+        RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP }}"
+        
+        # Check VM status
+        VM_STATUS=$(az vm get-instance-view --resource-group "${RESOURCE_GROUP}" --name "${VM_NAME}" --query 'instanceView.statuses[1].displayStatus' --output tsv)
+        echo "VM Status: ${VM_STATUS}"
+        
+        if [[ "${VM_STATUS}" == "VM running" ]]; then
+          echo "✅ RHEL VM is running successfully"
+        else
+          echo "❌ RHEL VM is not in running state: ${VM_STATUS}"
+          exit 1
+        fi
+        
+        # Check Azure Arc connectivity (if enabled)
+        ARC_STATUS=$(az connectedmachine show --resource-group "${RESOURCE_GROUP}" --name "${VM_NAME}" --query 'status' --output tsv 2>/dev/null || echo "Not connected")
+        echo "Azure Arc Status: ${ARC_STATUS}"
+        
+        echo "## 🧪 RHEL VM Testing Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Status**: ${VM_STATUS}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Azure Arc**: ${ARC_STATUS}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test Completion**: $(date)" >> $GITHUB_STEP_SUMMARY

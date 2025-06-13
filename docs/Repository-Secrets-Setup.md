@@ -24,6 +24,19 @@ These secrets are used for authenticating with Azure using OpenID Connect (OIDC)
 |-------------|-------------|----------|---------------|
 | `SUBNET_ID` | The full Azure resource ID of the subnet for deploying validation VMs | ✅ | `/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.Network/virtualNetworks/{vnet-name}/subnets/{subnet-name}` |
 
+### 3. VM Deployment Secrets
+
+These secrets are required for the VM deployment workflow (`deploy-vm.yml`):
+
+| Secret Name | Description | Required | Example Value |
+|-------------|-------------|----------|---------------|
+| `AZURE_CREDENTIALS` | Service principal credentials in JSON format | ✅ | `{"clientId":"...","clientSecret":"...","subscriptionId":"...","tenantId":"..."}` |
+| `AZURE_RESOURCE_GROUP` | Target resource group name for VM deployments | ✅ | `rg-vms-dev-westus2-001` |
+| `VM_ADMIN_USERNAME` | Administrator username for deployed VMs | ✅ | `azureuser` |
+| `VM_ADMIN_PASSWORD` | Administrator password for deployed VMs (must meet complexity requirements) | ✅ | `YourSecurePassword123!` |
+| `KEYVAULT_ID` | Resource ID of Key Vault containing certificates (Linux VMs only) | ✅ (Linux) | `/subscriptions/.../resourceGroups/.../providers/Microsoft.KeyVault/vaults/kv-example` |
+| `CERTIFICATE_URL` | Key Vault secret URI for VM certificate (Linux VMs only) | ✅ (Linux) | `https://kv-example.vault.azure.net/secrets/vm-cert/abc123` |
+
 ## Setting Up the Secrets
 
 ### Step 1: Navigate to Repository Settings
@@ -86,6 +99,51 @@ $subnetName = "your-subnet"
 # Get the subnet resource ID
 $subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork (Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName) -Name $subnetName
 Write-Host "SUBNET_ID: $($subnet.Id)"
+```
+
+### VM Deployment Secret Values
+
+#### AZURE_CREDENTIALS
+Create a service principal with JSON credentials:
+
+```powershell
+# Create service principal for GitHub Actions
+$sp = New-AzADServicePrincipal -DisplayName "github-actions-vm-deployment" -Role "Contributor"
+
+# Output the JSON format needed for AZURE_CREDENTIALS secret
+$credentials = @{
+    clientId = $sp.AppId
+    clientSecret = $sp.PasswordCredentials.SecretText
+    subscriptionId = (Get-AzContext).Subscription.Id
+    tenantId = (Get-AzContext).Tenant.Id
+} | ConvertTo-Json -Compress
+
+Write-Host "AZURE_CREDENTIALS:"
+Write-Host $credentials
+```
+
+#### VM_ADMIN_PASSWORD
+Choose a strong password that meets these requirements:
+- Minimum 12 characters
+- Contains uppercase letters (A-Z)
+- Contains lowercase letters (a-z)
+- Contains numbers (0-9)
+- Contains special characters (!@#$%^&*)
+- Example: `YourSecurePassword123!`
+
+#### KEYVAULT_ID and CERTIFICATE_URL (Linux VMs only)
+
+```powershell
+# Get Key Vault resource ID
+$keyVaultName = "your-keyvault-name"
+$keyVaultRg = "your-keyvault-resource-group"
+$keyVault = Get-AzKeyVault -VaultName $keyVaultName -ResourceGroupName $keyVaultRg
+Write-Host "KEYVAULT_ID: $($keyVault.ResourceId)"
+
+# Get certificate URL (replace 'your-cert-name' with actual certificate name)
+$certName = "your-cert-name"
+$cert = Get-AzKeyVaultSecret -VaultName $keyVaultName -Name $certName
+Write-Host "CERTIFICATE_URL: $($cert.Id)"
 ```
 
 Or using Azure CLI:

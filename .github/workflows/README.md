@@ -1,6 +1,17 @@
 # Azure VM Image Builder Template Workflow
 
-This repository provides a comprehensive workflow template for building and distributing custom VM images using Azure VM Image Builder (AIB). The workflow has been designed with modularity and maintainability in mind.
+This repository provides comprehensive workflows for building and deploying custom VM images using Azure VM Image Builder (AIB).
+
+## Workflows Overview
+
+### 1. Image Building Workflows
+- `GoldenLinuxImage.yml` - Builds Linux golden images
+- `GoldenRHELImage.yml` - Builds Red Hat Enterprise Linux images  
+- `GoldenWindowsImage.yml` - Builds Windows golden images
+- `template.yaml` - Reusable template workflow
+
+### 2. VM Deployment Workflow
+- `deploy-vm.yml` - Deploys VMs from Shared Image Gallery images
 
 ## Current Architecture
 
@@ -12,6 +23,16 @@ The primary reusable workflow that orchestrates the entire image building proces
 - Coordinates multiple composite actions to build and validate images
 - Supports both ARM templates and Image Builder templates
 - Provides built-in validation through VM deployment testing
+
+### VM Deployment Workflow (`deploy-vm.yml`)
+A dedicated workflow for deploying VMs from pre-built gallery images. This workflow:
+- 🔒 **Secure deployment** using repository secrets
+- 🐧 **Linux VM support** with certificate-based authentication and Azure Arc
+- 🪟 **Windows VM support** with password authentication and auto-shutdown
+- 🔍 **Pre-deployment validation** with what-if analysis
+- 🧹 **Automatic cleanup** on deployment failures
+- 📊 **Comprehensive reporting** with deployment summaries
+- 🌍 **Multi-environment support** (dev/staging/prod)
 
 ### Composite Actions (`.github/actions/`)
 Modular, reusable actions that handle specific aspects of the image building process:
@@ -126,3 +147,88 @@ Before using these workflows, you must configure the following repository secret
 - **`armTemplate`**: Azure Resource Manager templates for image building
 
 Both template types support the same workflow features and validation capabilities.
+
+## Using the VM Deployment Workflow
+
+### Quick Start Guide
+
+1. **Setup Repository Secrets**
+   ```powershell
+   # Required secrets for VM deployment (see docs/Repository-Secrets-Setup.md)
+   # - AZURE_CREDENTIALS (Service principal JSON)
+   # - AZURE_SUBSCRIPTION_ID 
+   # - AZURE_RESOURCE_GROUP
+   # - VM_ADMIN_USERNAME
+   # - VM_ADMIN_PASSWORD
+   # - SUBNET_ID
+   # - KEYVAULT_ID (Linux only)
+   # - CERTIFICATE_URL (Linux only)
+   ```
+
+2. **Navigate to Actions**
+   - Go to your repository's **Actions** tab
+   - Select **Deploy Azure VM from Gallery**
+   - Click **Run workflow**
+
+3. **Configure Deployment Parameters**
+   - **Environment**: Choose dev, staging, or prod
+   - **VM Type**: Select linux or windows
+   - **Image Name**: Pick from available gallery images
+   - **VM Size**: Choose appropriate compute size
+   - **Auto-Shutdown**: Enable for Windows dev/test VMs
+   - **Custom VM Name**: Override auto-generated naming (optional)
+
+### Deployment Examples
+
+#### Development Linux VM
+```yaml
+environment: dev
+vmType: linux
+imageName: GoldenLinuxImage
+vmSize: Standard_B2s
+customVmName: dev-linux-test
+```
+
+#### Production Windows VM
+```yaml
+environment: prod
+vmType: windows
+imageName: GoldenWindowsImage
+vmSize: Standard_DS2_v2
+enableAutoShutdown: false
+```
+
+### Workflow Features
+
+#### Security & Validation
+- 🔒 **Secure authentication** using Azure service principals
+- 🔍 **Pre-deployment validation** with ARM template what-if analysis
+- 🛡️ **Resource validation** checks before deployment
+- 📋 **Audit trail** with complete deployment logging
+
+#### Deployment Capabilities
+- 🐧 **Linux VMs** with certificate-based auth and Azure Arc integration
+- 🪟 **Windows VMs** with password auth and optional auto-shutdown
+- 🌍 **Multi-environment** support with environment-specific secrets
+- 📊 **Rich outputs** including VM details and connection info
+
+#### Error Handling
+- 🧹 **Automatic cleanup** removes partial deployments on failure
+- 🔄 **Intelligent retry** for transient Azure API issues
+- 📝 **Detailed error reporting** with troubleshooting guidance
+
+### Supported VM Configurations
+
+| VM Type | Authentication | Features | Template |
+|---------|---------------|----------|----------|
+| Linux | Certificate (Key Vault) | Azure Arc, SSH | `azuredeploy.linux.json` |
+| Windows | Password | RDP, Auto-shutdown | `azuredeploy.windows.json` |
+
+### Monitoring Deployments
+
+The workflow provides comprehensive monitoring:
+
+1. **Real-time Progress**: Watch deployment steps in GitHub Actions UI
+2. **Validation Reports**: Pre-deployment checks and what-if analysis
+3. **Deployment Summary**: Resource details, outputs, and next steps
+4. **Error Details**: Comprehensive troubleshooting information on failures
