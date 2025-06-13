@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vmName": {
+      "value": "vm-linux-xxxx"
+    },
+    "adminUsername": {
+      "value": "adminuser"
+    },
+    "sshKeySubscriptionId": {
+      "value": "<subscription-id>"
+    },
+    "sshKeyResourceGroup": {
+      "value": "<resource-group>"
+    },
+    "sshKeyName": {
+      "value": "<ssh-key-name>"
+    },
+    "disablePasswordAuthentication": {
+      "value": true
+    },
+    "gallerySubscriptionId": {
+      "value": "<subscription-id>"
+    },
+    "galleryResourceGroup": {
+      "value": "<resource-group>"
+    },
+    "galleryName": {
+      "value": "<gallery-name>"
+    },
+    "vmSize": {
+      "value": "Standard_DS2_v2"
+    },
+    "subnetId": {
+      "value": "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<subnet>"
+    },
+    "imageName": {
+      "value": "<image-name>"
+    },
+    "imageVersion": {
+      "value": "latest"
+    }
+  }
+}

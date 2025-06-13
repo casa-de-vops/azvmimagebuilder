@@ -1,0 +1,118 @@
+name: 'Cleanup Failed VM Deployment'
+description: 'Cleans up partially created resources from failed VM deployment'
+inputs:
+  resource-group:
+    description: 'Target resource group name'
+    required: true
+  vm-name:
+    description: 'Virtual machine name to clean up'
+    required: true
+  vm-type:
+    description: 'VM type (linux or windows)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cleanup Virtual Machine
+      shell: bash
+      run: |
+        echo "🧹 Cleaning up failed deployment resources..."
+        
+        # Check if VM was created and delete it
+        if az vm show --resource-group "${{ inputs.resource-group }}" --name "${{ inputs.vm-name }}" --output none 2>/dev/null; then
+          echo "🗑️ Deleting VM: ${{ inputs.vm-name }}"
+          az vm delete \
+            --resource-group "${{ inputs.resource-group }}" \
+            --name "${{ inputs.vm-name }}" \
+            --yes --force-deletion --no-wait
+          echo "✅ VM deletion initiated"
+        else
+          echo "ℹ️ VM '${{ inputs.vm-name }}' not found - may not have been created"
+        fi
+
+    - name: Cleanup Network Interface
+      shell: bash
+      run: |
+        # Clean up network interface
+        NIC_NAME="${{ inputs.vm-name }}-nic"
+        if az network nic show --resource-group "${{ inputs.resource-group }}" --name "${NIC_NAME}" --output none 2>/dev/null; then
+          echo "🗑️ Deleting Network Interface: ${NIC_NAME}"
+          az network nic delete \
+            --resource-group "${{ inputs.resource-group }}" \
+            --name "${NIC_NAME}" \
+            --no-wait
+          echo "✅ Network Interface deletion initiated"
+        else
+          echo "ℹ️ Network Interface '${NIC_NAME}' not found"
+        fi
+
+    - name: Cleanup Network Security Group (Windows)
+      if: inputs.vm-type == 'windows'
+      shell: bash
+      run: |
+        # Clean up network security group (Windows VMs only)
+        NSG_NAME="${{ inputs.vm-name }}-nsg"
+        if az network nsg show --resource-group "${{ inputs.resource-group }}" --name "${NSG_NAME}" --output none 2>/dev/null; then
+          echo "🗑️ Deleting Network Security Group: ${NSG_NAME}"
+          az network nsg delete \
+            --resource-group "${{ inputs.resource-group }}" \
+            --name "${NSG_NAME}" \
+            --no-wait
+          echo "✅ Network Security Group deletion initiated"
+        else
+          echo "ℹ️ Network Security Group '${NSG_NAME}' not found"
+        fi
+
+    - name: Cleanup OS Disk
+      shell: bash
+      run: |
+        # Clean up OS disk if it exists
+        DISK_NAME="${{ inputs.vm-name }}-osdisk"
+        if az disk show --resource-group "${{ inputs.resource-group }}" --name "${DISK_NAME}" --output none 2>/dev/null; then
+          echo "🗑️ Deleting OS Disk: ${DISK_NAME}"
+          az disk delete \
+            --resource-group "${{ inputs.resource-group }}" \
+            --name "${DISK_NAME}" \
+            --yes --no-wait
+          echo "✅ OS Disk deletion initiated"
+        else
+          echo "ℹ️ OS Disk '${DISK_NAME}' not found"
+        fi
+
+    - name: Cleanup Auto-Shutdown Schedule (Windows)
+      if: inputs.vm-type == 'windows'
+      shell: bash
+      run: |
+        # Clean up auto-shutdown schedule for Windows VMs
+        SCHEDULE_NAME="shutdown-computevm-${{ inputs.vm-name }}"
+        if az resource show --resource-group "${{ inputs.resource-group }}" --resource-type "Microsoft.DevTestLab/schedules" --name "${SCHEDULE_NAME}" --output none 2>/dev/null; then
+          echo "🗑️ Deleting Auto-Shutdown Schedule: ${SCHEDULE_NAME}"
+          az resource delete \
+            --resource-group "${{ inputs.resource-group }}" \
+            --resource-type "Microsoft.DevTestLab/schedules" \
+            --name "${SCHEDULE_NAME}" \
+            --no-wait
+          echo "✅ Auto-Shutdown Schedule deletion initiated"
+        else
+          echo "ℹ️ Auto-Shutdown Schedule '${SCHEDULE_NAME}' not found"
+        fi
+
+    - name: Cleanup Summary
+      shell: bash
+      run: |
+        echo "✅ Cleanup completed for VM: ${{ inputs.vm-name }}"
+        echo "📝 Note: Resource deletions are running asynchronously"
+        echo "🔍 You can monitor deletion progress in the Azure Portal"
+        echo ""
+        echo "## 🧹 Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+        echo "Initiated cleanup for failed deployment of **${{ inputs.vm-name }}**:" >> $GITHUB_STEP_SUMMARY
+        echo "- Virtual Machine" >> $GITHUB_STEP_SUMMARY
+        echo "- Network Interface" >> $GITHUB_STEP_SUMMARY
+        echo "- OS Disk" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ inputs.vm-type }}" == "windows" ]]; then
+          echo "- Network Security Group" >> $GITHUB_STEP_SUMMARY
+          echo "- Auto-Shutdown Schedule" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Note**: Deletions are running asynchronously. Monitor progress in Azure Portal." >> $GITHUB_STEP_SUMMARY

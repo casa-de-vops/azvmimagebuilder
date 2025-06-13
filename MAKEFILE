@@ -1,0 +1,26 @@
+# Makefile for Terraform workflows in the terraform directory
+
+TERRAFORM_DIR=terraform
+
+init:
+	cd $(TERRAFORM_DIR) && terraform init
+
+plan:
+	cd $(TERRAFORM_DIR) && terraform plan
+
+apply:
+	cd $(TERRAFORM_DIR) && terraform apply
+
+destroy:
+	cd $(TERRAFORM_DIR) && terraform destroy -auto-approve
+
+fmt:
+	cd $(TERRAFORM_DIR) && terraform fmt -recursive
+
+validate:
+	cd $(TERRAFORM_DIR) && terraform validate
+
+clean:
+	rm -rf $(TERRAFORM_DIR)/.terraform $(TERRAFORM_DIR)/.terraform.lock.hcl
+
+.PHONY: init plan apply destroy fmt validate clean

@@ -1,0 +1,245 @@
+name: 'Complete VM Deployment Orchestrator'
+description: 'Orchestrates complete VM deployment process with validation, deployment, reporting, and cleanup'
+
+inputs:
+  # Core VM Configuration
+  vm-name:
+    description: 'Virtual machine name'
+    required: true
+  vm-type:
+    description: 'VM type (linux or windows)'
+    required: true
+    default: 'linux'
+  vm-size:
+    description: 'Virtual machine size'
+    required: true
+    default: 'Standard_DS2_v2'
+  image-name:
+    description: 'Gallery image name'
+    required: true
+  template-path:
+    description: 'Path to ARM template file'
+    required: true
+  
+  # Azure Configuration
+  subscription-id:
+    description: 'Azure subscription ID'
+    required: true
+  resource-group:
+    description: 'Target resource group name'
+    required: true
+  deployment-name:
+    description: 'Name for the deployment'
+    required: true
+  subnet-id:
+    description: 'Subnet resource ID'
+    required: true
+  
+  # Authentication
+  admin-username:
+    description: 'VM administrator username'
+    required: true
+  admin-password:
+    description: 'VM administrator password'
+    required: true
+  keyvault-id:
+    description: 'Key Vault resource ID (Linux VMs only)'
+    required: false
+  certificate-url:
+    description: 'Certificate URL from Key Vault (Linux VMs only)'
+    required: false
+  
+  # Environment & Reporting
+  environment:
+    description: 'Deployment environment (dev/staging/prod)'
+    required: true
+    default: 'dev'
+  enable-auto-shutdown:
+    description: 'Enable auto-shutdown (Windows only)'
+    required: false
+    default: 'false'
+  
+  # Optional Features
+  enable-testing:
+    description: 'Enable post-deployment testing'
+    required: false
+    default: 'true'
+  enable-rhel-features:
+    description: 'Enable RHEL-specific features and reporting'
+    required: false
+    default: 'false'
+  rhel-version:
+    description: 'RHEL version for reporting'
+    required: false
+    default: '9'
+
+outputs:
+  vm-resource-id:
+    description: 'Resource ID of the deployed VM'
+    value: ${{ steps.deploy-vm.outputs.vm-resource-id }}
+  vm-name:
+    description: 'Name of the deployed VM'
+    value: ${{ steps.deploy-vm.outputs.vm-name }}
+  private-ip:
+    description: 'Private IP address of the VM'
+    value: ${{ steps.deploy-vm.outputs.private-ip }}
+  network-interface-id:
+    description: 'Network interface resource ID'
+    value: ${{ steps.deploy-vm.outputs.network-interface-id }}
+  deployment-status:
+    description: 'Overall deployment status'
+    value: ${{ steps.finalize.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    # Step 1: Validate Azure Resources
+    - name: Validate Azure Resources
+      id: validate-resources
+      uses: ./.github/actions/validate-azure-resources
+      with:
+        resource-group: ${{ inputs.resource-group }}
+        subnet-id: ${{ inputs.subnet-id }}
+        keyvault-id: ${{ inputs.keyvault-id }}
+        vm-type: ${{ inputs.vm-type }}
+
+    # Step 2: Validate ARM Template
+    - name: Validate ARM Template
+      id: validate-template
+      uses: ./.github/actions/validate-arm-template
+      with:
+        template-path: ${{ inputs.template-path }}
+        resource-group: ${{ inputs.resource-group }}
+        deployment-name: ${{ inputs.deployment-name }}
+        vm-type: ${{ inputs.vm-type }}
+        vm-name: ${{ inputs.vm-name }}
+        admin-username: ${{ inputs.admin-username }}
+        admin-password: ${{ inputs.admin-password }}
+        subnet-id: ${{ inputs.subnet-id }}
+        image-name: ${{ inputs.image-name }}
+        vm-size: ${{ inputs.vm-size }}
+        keyvault-id: ${{ inputs.keyvault-id }}
+        certificate-url: ${{ inputs.certificate-url }}
+        enable-auto-shutdown: ${{ inputs.enable-auto-shutdown }}
+
+    # Step 3: Deploy VM
+    - name: Deploy Azure VM
+      id: deploy-vm
+      uses: ./.github/actions/deploy-azure-vm
+      with:
+        template-path: ${{ inputs.template-path }}
+        resource-group: ${{ inputs.resource-group }}
+        deployment-name: ${{ inputs.deployment-name }}
+        subscription-id: ${{ inputs.subscription-id }}
+        vm-type: ${{ inputs.vm-type }}
+        vm-name: ${{ inputs.vm-name }}
+        admin-username: ${{ inputs.admin-username }}
+        admin-password: ${{ inputs.admin-password }}
+        subnet-id: ${{ inputs.subnet-id }}
+        image-name: ${{ inputs.image-name }}
+        vm-size: ${{ inputs.vm-size }}
+        keyvault-id: ${{ inputs.keyvault-id }}
+        certificate-url: ${{ inputs.certificate-url }}
+        enable-auto-shutdown: ${{ inputs.enable-auto-shutdown }}
+
+    # Step 4: Generate Deployment Report
+    - name: Generate Deployment Report
+      id: generate-report
+      uses: ./.github/actions/generate-deployment-report
+      with:
+        environment: ${{ inputs.environment }}
+        vm-type: ${{ inputs.vm-type }}
+        vm-name: ${{ inputs.vm-name }}
+        image-name: ${{ inputs.image-name }}
+        vm-size: ${{ inputs.vm-size }}
+        resource-group: ${{ inputs.resource-group }}
+        deployment-name: ${{ inputs.deployment-name }}
+        vm-resource-id: ${{ steps.deploy-vm.outputs.vm-resource-id }}
+        private-ip: ${{ steps.deploy-vm.outputs.private-ip }}
+        network-interface-id: ${{ steps.deploy-vm.outputs.network-interface-id }}
+        enable-auto-shutdown: ${{ inputs.enable-auto-shutdown }}
+
+    # Step 5: RHEL-Specific Post-Deployment (Conditional)
+    - name: RHEL-Specific Post-Deployment Tasks
+      id: rhel-tasks
+      if: inputs.enable-rhel-features == 'true'
+      shell: bash
+      run: |
+        echo "🔴 RHEL VM Deployment Completed!"
+        echo ""
+        echo "### RHEL-Specific Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **RHEL Version**: ${{ inputs.rhel-version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Red Hat Subscription**: Configured in golden image" >> $GITHUB_STEP_SUMMARY
+        echo "- **SELinux**: Enabled by default" >> $GITHUB_STEP_SUMMARY
+        echo "- **Firewall**: Firewalld enabled by default" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### RHEL Management Commands" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "# Check RHEL version" >> $GITHUB_STEP_SUMMARY
+        echo "cat /etc/redhat-release" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Check subscription status" >> $GITHUB_STEP_SUMMARY
+        echo "sudo subscription-manager status" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Update packages" >> $GITHUB_STEP_SUMMARY
+        echo "sudo dnf update -y" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Check SELinux status" >> $GITHUB_STEP_SUMMARY
+        echo "sestatus" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    # Step 6: Post-Deployment Testing (Conditional)
+    - name: VM Connectivity Testing
+      id: test-vm
+      if: inputs.enable-testing == 'true'
+      shell: bash
+      run: |
+        echo "🧪 Testing VM connectivity and basic functionality..."
+        
+        VM_NAME="${{ inputs.vm-name }}"
+        RESOURCE_GROUP="${{ inputs.resource-group }}"
+        
+        # Check VM status
+        VM_STATUS=$(az vm get-instance-view --resource-group "${RESOURCE_GROUP}" --name "${VM_NAME}" --query 'instanceView.statuses[1].displayStatus' --output tsv)
+        echo "VM Status: ${VM_STATUS}"
+        
+        if [[ "${VM_STATUS}" == "VM running" ]]; then
+          echo "✅ VM is running successfully"
+          echo "vm-status=running" >> $GITHUB_OUTPUT
+        else
+          echo "❌ VM is not in running state: ${VM_STATUS}"
+          echo "vm-status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        # Check Azure Arc connectivity (if enabled)
+        ARC_STATUS=$(az connectedmachine show --resource-group "${RESOURCE_GROUP}" --name "${VM_NAME}" --query 'status' --output tsv 2>/dev/null || echo "Not connected")
+        echo "Azure Arc Status: ${ARC_STATUS}"
+        echo "arc-status=${ARC_STATUS}" >> $GITHUB_OUTPUT
+        
+        echo "## 🧪 VM Testing Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Status**: ${VM_STATUS}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Azure Arc**: ${ARC_STATUS}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Test Completion**: $(date)" >> $GITHUB_STEP_SUMMARY
+
+    # Step 7: Finalization
+    - name: Finalize Deployment
+      id: finalize
+      shell: bash
+      run: |
+        echo "🎉 VM Deployment Orchestration Completed Successfully!"
+        echo "status=success" >> $GITHUB_OUTPUT
+        
+        echo "## 📋 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Name**: ${{ inputs.vm-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Type**: ${{ inputs.vm-type }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image**: ${{ inputs.image-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Resource Group**: ${{ inputs.resource-group }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment**: ${{ inputs.deployment-name }}" >> $GITHUB_STEP_SUMMARY
+        if [[ "${{ inputs.enable-rhel-features }}" == "true" ]]; then
+          echo "- **RHEL Features**: Enabled (Version ${{ inputs.rhel-version }})" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [[ "${{ inputs.enable-testing }}" == "true" ]]; then
+          echo "- **Testing**: Enabled and completed" >> $GITHUB_STEP_SUMMARY
+        fi

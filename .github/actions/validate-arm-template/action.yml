@@ -1,0 +1,108 @@
+name: 'Validate ARM Template'
+description: 'Validates ARM template and shows deployment preview'
+inputs:
+  template-path:
+    description: 'Path to the ARM template file'
+    required: true
+  resource-group:
+    description: 'Target resource group name'
+    required: true
+  deployment-name:
+    description: 'Name for the deployment'
+    required: true
+  vm-type:
+    description: 'VM type (linux or windows)'
+    required: true
+  vm-name:
+    description: 'Virtual machine name'
+    required: true
+  admin-username:
+    description: 'VM administrator username'
+    required: true
+  admin-password:
+    description: 'VM administrator password'
+    required: true
+  subnet-id:
+    description: 'Subnet resource ID'
+    required: true
+  image-name:
+    description: 'Gallery image name'
+    required: true
+  vm-size:
+    description: 'Virtual machine size'
+    required: true
+  keyvault-id:
+    description: 'Key Vault resource ID (Linux only)'
+    required: false
+  certificate-url:
+    description: 'Certificate URL from Key Vault (Linux only)'
+    required: false
+  enable-auto-shutdown:
+    description: 'Enable auto-shutdown (Windows only)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build Parameters
+      id: build-params
+      shell: bash
+      run: |
+        echo "🔧 Building deployment parameters..."
+        
+        # Build parameters based on VM type
+        if [[ "${{ inputs.vm-type }}" == "linux" ]]; then
+          PARAMETERS="vmName=${{ inputs.vm-name }} \
+                     adminUsername=${{ inputs.admin-username }} \
+                     adminPassword=${{ inputs.admin-password }} \
+                     keyVaultId=${{ inputs.keyvault-id }} \
+                     certificateUrl=${{ inputs.certificate-url }} \
+                     subnetId=${{ inputs.subnet-id }} \
+                     imageName=${{ inputs.image-name }} \
+                     vmSize=${{ inputs.vm-size }}"
+        else
+          PARAMETERS="vmName=${{ inputs.vm-name }} \
+                     adminUsername=${{ inputs.admin-username }} \
+                     adminPassword=${{ inputs.admin-password }} \
+                     subnetId=${{ inputs.subnet-id }} \
+                     imageName=${{ inputs.image-name }} \
+                     vmSize=${{ inputs.vm-size }} \
+                     enableAutoShutdown=${{ inputs.enable-auto-shutdown }}"
+        fi
+        
+        # Save parameters for reuse
+        echo "parameters=${PARAMETERS}" >> $GITHUB_OUTPUT
+        echo "✅ Parameters built for ${{ inputs.vm-type }} VM"
+
+    - name: Validate Template
+      shell: bash
+      run: |
+        echo "🔍 Validating ARM template..."
+        
+        # Validate deployment
+        az deployment group validate \
+          --resource-group "${{ inputs.resource-group }}" \
+          --template-file "${{ inputs.template-path }}" \
+          --parameters ${{ steps.build-params.outputs.parameters }}
+        
+        echo "✅ Template validation passed"
+
+    - name: Preview Deployment (What-If)
+      shell: bash
+      run: |
+        echo "👀 Previewing deployment changes..."
+        
+        # Show what-if analysis
+        az deployment group what-if \
+          --resource-group "${{ inputs.resource-group }}" \
+          --template-file "${{ inputs.template-path }}" \
+          --parameters ${{ steps.build-params.outputs.parameters }} \
+          --name "${{ inputs.deployment-name }}"
+        
+        echo "✅ What-if analysis completed"
+
+outputs:
+  parameters:
+    description: 'Built parameters for deployment'
+    value: ${{ steps.build-params.outputs.parameters }}

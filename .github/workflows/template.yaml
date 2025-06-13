@@ -1,0 +1,245 @@
+name: "[Template] Build and distribute custom VM image"
+
+description: |
+  Reusable workflow that builds and distributes a custom VM image with
+  Azure Image Builder (AIB) and publishes the resolved template as an
+  artifact.
+
+on:
+  workflow_call:
+    inputs:
+      templateFolder: { required: true, type: string }
+      templateName: { required: true, type: string }
+      sigResourceGroup: { required: true, type: string }
+      imageDefName: { required: true, type: string }
+      sigName: { required: true, type: string }
+      uaiIdentityName: { required: true, type: string }
+      location: { required: true, type: string }
+      additionalregion: { required: false, type: string, default: '' }
+      runOutputName: { required: true, type: string }
+      buildRGName: { required: false, type: string }
+      validation-kv-name: { required: false, type: string, default: '' }
+      vm-os-type: { required: true, type: string }
+      templateType:
+        description: "armTemplate | imageTemplate. Allowed values: 'armTemplate', 'imageTemplate'."
+        type: string
+        required: true
+      skipBuild:
+        description: "If true, skips building a new image and only runs validation on the latest image in the gallery."
+        type: boolean
+        required: false
+        default: false
+
+    secrets:
+      AZURE_CLIENT_ID: { required: true }
+      AZURE_TENANT_ID: { required: true }
+      AZURE_SUBSCRIPTION_ID: { required: true }
+      SUBNET_ID: { required: true }
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  id-token: write
+  actions: read
+  security-events: write
+
+jobs:
+  PREPARE-IMAGE-TEMPLATE:
+    runs-on: "windows-latest"
+    if: inputs.skipBuild != true
+
+    env:
+      SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      TEMPLATE_FILE: ${{ inputs.templateName }}
+      TEMPLATE_DIR: templates/${{ inputs.templateFolder }}
+      TEMPLATE_TYPE: ${{ inputs.templateType }}
+      IMAGE_DEF: ${{ inputs.imageDefName }}
+      SIG_NAME: ${{ inputs.sigName }}
+      PRIMARY_REGION: ${{ inputs.location }}
+      ADDL_REGION: ${{ inputs.additionalregion }}
+      RUN_OUTPUT: ${{ inputs.runOutputName }}
+      BUILD_RG: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.buildRGName }}"
+      IMG_BUILDER_ID: "/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${{ inputs.sigResourceGroup }}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${{ inputs.uaiIdentityName }}"
+
+    outputs:
+      release_version: ${{ steps.set_version.outputs.release_version }}
+      image_template_name: ${{ steps.set_version.outputs.image_template_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Azure login
+        uses: ./.github/actions/azure-login
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set version
+        id: set_version
+        uses: ./.github/actions/set-version
+        with:
+          run-output-name: ${{ inputs.runOutputName }}
+
+      - name: Prepare image template
+        uses: ./.github/actions/prepare-image-template
+        with:
+          template-file: ${{ env.TEMPLATE_FILE }}
+          template-dir: ${{ env.TEMPLATE_DIR }}
+          template-type: ${{ env.TEMPLATE_TYPE }}
+          subscription-id: ${{ env.SUB_ID }}
+          sig-resource-group: ${{ env.SIG_RG }}
+          image-def-name: ${{ env.IMAGE_DEF }}
+          sig-name: ${{ env.SIG_NAME }}
+          primary-region: ${{ env.PRIMARY_REGION }}
+          additional-region: ${{ env.ADDL_REGION }}
+          run-output-name: ${{ env.RUN_OUTPUT }}
+          build-rg-name: ${{ env.BUILD_RG }}
+          img-builder-id: ${{ env.IMG_BUILDER_ID }}
+          image-template-name: ${{ steps.set_version.outputs.image_template_name }}
+
+  BUILD-DISTRIBUTE-IMAGE:
+    needs: PREPARE-IMAGE-TEMPLATE
+    runs-on: "windows-latest"
+    if: github.ref == 'refs/heads/main' && inputs.skipBuild != true
+    
+    env:
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      TEMPLATE_TYPE: ${{ inputs.templateType }}
+      IMAGE_TEMPLATE_NAME: ${{ needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: ./.github/actions/azure-login
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and distribute image
+        uses: ./.github/actions/build-distribute-image
+        with:
+          template-type: ${{ env.TEMPLATE_TYPE }}
+          sig-resource-group: ${{ env.SIG_RG }}
+          image-template-name: ${{ env.IMAGE_TEMPLATE_NAME }}
+
+  VALIDATE-IMAGE:
+    needs: [PREPARE-IMAGE-TEMPLATE, BUILD-DISTRIBUTE-IMAGE]
+    runs-on: "windows-latest"
+    if: >
+      (github.ref == 'refs/heads/main' && success() && inputs.skipBuild != true) || 
+      (inputs.skipBuild == true)
+    
+    outputs:
+      vm-name: ${{ steps.validate.outputs.vm-name }}
+      resource-group: ${{ steps.validate.outputs.resource-group }}
+      image-id: ${{ steps.validate.outputs.image-id }}
+    
+    env:
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      TEMPLATE_TYPE: ${{ inputs.templateType }}
+      IMAGE_TEMPLATE_NAME: ${{ inputs.skipBuild != true && needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name || '' }}
+      PRIMARY_REGION: ${{ inputs.location }}
+      SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      SIG_NAME: ${{ inputs.sigName }}
+      IMAGE_DEF: ${{ inputs.imageDefName }}
+      VALIDATION_VM_NAME: ${{ inputs.skipBuild != true && format('vm-val-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) || format('vm-val-{0}', github.run_number) }}
+      VALIDATION_RG: ${{ inputs.buildRGName != '' && inputs.buildRGName || (inputs.skipBuild != true && format('rg-img-validation-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) || format('rg-img-validation-latest-{0}', github.run_number)) }}
+      BUILD_RG_NAME: ${{ inputs.buildRGName }}
+      VALIDATION_KV_NAME: ${{ inputs.validation-kv-name }}
+      SUBNET_ID: ${{ secrets.SUBNET_ID }}
+      VM_OS_TYPE: ${{ inputs.vm-os-type }}
+      SKIP_DISTRIBUTION_WAIT: ${{ inputs.skipBuild }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Azure login
+        uses: ./.github/actions/azure-login
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Validate VM image
+        id: validate
+        uses: ./.github/actions/validate-vm
+        env:
+          SUBNET_ID: ${{ env.SUBNET_ID }}
+        with:
+          sig-resource-group: ${{ env.SIG_RG }}
+          template-type: ${{ env.TEMPLATE_TYPE }}
+          image-template-name: ${{ env.IMAGE_TEMPLATE_NAME }}
+          primary-region: ${{ env.PRIMARY_REGION }}
+          subscription-id: ${{ env.SUB_ID }}
+          sig-name: ${{ env.SIG_NAME }}
+          image-def-name: ${{ env.IMAGE_DEF }}
+          validation-vm-name: ${{ env.VALIDATION_VM_NAME }}
+          validation-rg: ${{ env.VALIDATION_RG }}
+          build-rg-name: ${{ env.BUILD_RG_NAME }}
+          vm-os-type: ${{ env.VM_OS_TYPE }}
+          skip-distribution-wait: ${{ env.SKIP_DISTRIBUTION_WAIT }}
+
+  CLEANUP-RESOURCES:
+    needs: [PREPARE-IMAGE-TEMPLATE, VALIDATE-IMAGE]
+    runs-on: "windows-latest"
+    environment: 
+      name: cleanup-approval
+      url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    if: always() && (needs.VALIDATE-IMAGE.result == 'success' || needs.VALIDATE-IMAGE.result == 'failure')
+    
+    env:
+      SIG_RG: ${{ inputs.sigResourceGroup }}
+      TEMPLATE_TYPE: ${{ inputs.templateType }}
+      IMAGE_TEMPLATE_NAME: ${{ inputs.skipBuild != true && needs.PREPARE-IMAGE-TEMPLATE.outputs.image_template_name || '' }}
+      VALIDATION_VM_NAME: ${{ needs.VALIDATE-IMAGE.outputs.vm-name }}
+      VALIDATION_RG: ${{ needs.VALIDATE-IMAGE.outputs.resource-group }}
+      BUILD_RG_NAME: ${{ inputs.buildRGName }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: ./.github/actions/azure-login
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Display cleanup information
+        shell: pwsh
+        run: |
+          Write-Host "🧹 RESOURCE CLEANUP APPROVED"
+          Write-Host "============================================="
+          Write-Host "The following resources will be cleaned up:"
+          Write-Host "  • VM Name: ${{ env.VALIDATION_VM_NAME }}"
+          Write-Host "  • Resource Group: ${{ env.VALIDATION_RG }}"
+          if (-not [string]::IsNullOrEmpty('${{ env.IMAGE_TEMPLATE_NAME }}')) {
+            Write-Host "  • Image Template: ${{ env.IMAGE_TEMPLATE_NAME }}"
+          }
+          Write-Host ""
+          Write-Host "Validation Status: ${{ needs.VALIDATE-IMAGE.result }}"
+          Write-Host "============================================="
+
+      - name: Cleanup validation resources
+        uses: ./.github/actions/cleanup-vm
+        with:
+          sig-resource-group: ${{ env.SIG_RG }}
+          template-type: ${{ env.TEMPLATE_TYPE }}
+          image-template-name: ${{ env.IMAGE_TEMPLATE_NAME }}
+          validation-vm-name: ${{ env.VALIDATION_VM_NAME }}
+          validation-rg: ${{ env.VALIDATION_RG }}
+          build-rg-name: ${{ env.BUILD_RG_NAME }}

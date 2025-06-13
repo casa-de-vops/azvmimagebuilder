@@ -1,0 +1,199 @@
+name: "Cleanup VM Resources"
+description: "Cleans up validation VM and associated resources"
+
+inputs:
+  sig-resource-group:
+    required: true
+    description: "The resource group for the Shared Image Gallery"
+  template-type:
+    required: true
+    description: "The template type (armTemplate or imageTemplate)"
+  image-template-name:
+    required: false
+    description: "The image template name to delete (optional)"
+    default: ""
+  validation-vm-name:
+    required: true
+    description: "The name of the validation VM to delete"
+  validation-rg:
+    required: true
+    description: "The resource group containing the validation VM"
+  build-rg-name:
+    required: false
+    description: "The build resource group name, if specified will preserve this RG"
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    # ── Cleanup resources ─────────────────────────────────────
+    - name: Delete validation VM
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Continue' # Don't exit on error during cleanup
+        
+        Write-Host "🧹 Starting resource cleanup..."
+        Write-Host "================================================================"
+
+        # Delete validation VM first
+        try {
+          Write-Host "🗑️ Deleting validation VM: ${{ inputs.validation-vm-name }}"
+          Remove-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Force
+          Write-Host "✅ VM deletion initiated"
+        } catch {
+          Write-Host "❌ Error deleting VM ${{ inputs.validation-vm-name }}: $_"
+        }
+
+        # Wait for the VM deletion to complete before proceeding
+        Write-Host "⏳ Waiting 30 seconds for VM deletion to complete..."
+        Start-Sleep -Seconds 30
+
+    - name: Delete associated resources
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Continue' # Don't exit on error during cleanup
+        
+        # Get all resources associated with the validation VM
+        $resources = Get-AzResource -ResourceGroupName "${{ inputs.validation-rg }}" | Where-Object {
+            (
+                $_.Name -like "${{ inputs.validation-vm-name }}*" -and 
+                (
+                    $_.ResourceType -eq "Microsoft.Compute/disks" -or 
+                    $_.ResourceType -eq "Microsoft.Network/networkInterfaces" -or
+                    $_.ResourceType -eq "Microsoft.Network/publicIPAddresses"
+                )
+            ) -or 
+            (
+                $_.ResourceType -eq "Microsoft.KeyVault/vaults" -and $_.Name -like "*validate*"
+            )
+        }
+        
+        Write-Host "📋 Found $($resources.Count) associated resources to clean up"
+        
+        # Delete network interfaces first (they depend on public IPs)
+        $nics = $resources | Where-Object { $_.ResourceType -eq "Microsoft.Network/networkInterfaces" }
+        Write-Host "🔌 Deleting $($nics.Count) network interfaces..."
+        foreach ($nic in $nics) {
+          try {
+            Write-Host "  → Deleting NIC: $($nic.Name)"
+            Remove-AzResource -ResourceId $nic.ResourceId -Force
+            Write-Host "    ✅ Deleted"
+          } catch {
+            Write-Host "    ❌ Error deleting NIC $($nic.Name): $_"
+          }
+        }
+        
+        # Wait for NICs to be fully deleted
+        if ($nics.Count -gt 0) {
+          Write-Host "⏳ Waiting 30 seconds for NICs to be fully deleted..."
+          Start-Sleep -Seconds 30
+        }
+        
+        # Delete public IP addresses
+        $pips = $resources | Where-Object { $_.ResourceType -eq "Microsoft.Network/publicIPAddresses" }
+        Write-Host "🌐 Deleting $($pips.Count) public IP addresses..."
+        foreach ($pip in $pips) {
+          try {
+            Write-Host "  → Deleting Public IP: $($pip.Name)"
+            Remove-AzResource -ResourceId $pip.ResourceId -Force
+            Write-Host "    ✅ Deleted"
+          } catch {
+            Write-Host "    ❌ Error deleting Public IP $($pip.Name): $_"
+          }
+        }
+        
+        # Wait for public IPs to be fully deleted
+        if ($pips.Count -gt 0) {
+          Write-Host "⏳ Waiting 30 seconds for Public IPs to be fully deleted..."
+          Start-Sleep -Seconds 30
+        }
+        
+        # Finally delete disks (they have the fewest dependencies)
+        $disks = $resources | Where-Object { $_.ResourceType -eq "Microsoft.Compute/disks" }
+        Write-Host "💾 Deleting $($disks.Count) disks..."
+        foreach ($disk in $disks) {
+          try {
+            Write-Host "  → Deleting disk: $($disk.Name)"
+            Remove-AzResource -ResourceId $disk.ResourceId -Force
+            Write-Host "    ✅ Deleted"
+          } catch {
+            Write-Host "    ❌ Error deleting disk $($disk.Name): $_"
+          }
+        }
+
+        # Delete Key Vaults
+        $keyVaults = $resources | Where-Object { $_.ResourceType -eq "Microsoft.KeyVault/vaults" }
+        Write-Host "🔐 Deleting $($keyVaults.Count) Key Vault(s)..."
+        foreach ($kv in $keyVaults) {
+          try {
+            Write-Host "  → Deleting Key Vault: $($kv.Name)"
+            Remove-AzResource -ResourceId $kv.ResourceId -Force
+            Write-Host "    ✅ Deleted"
+          } catch {
+            Write-Host "    ❌ Error deleting Key Vault $($kv.Name): $_"
+          }
+
+          # Attempt purge (if soft-delete is enabled)
+          try {
+            Write-Host "  → Purging Key Vault: $($kv.Name)"
+            Remove-AzKeyVault -VaultName $kv.Name -Location $kv.Location -InRemovedState -Force
+            Write-Host "    💀 Purged Key Vault"
+          } catch {
+            Write-Host "    ⚠️ Could not purge Key Vault $($kv.Name). It may not be in soft-deleted state or you lack purge permission."
+          }
+        }
+
+    - name: Delete resource group and image template
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Continue' # Don't exit on error during cleanup
+        
+        # Only delete the resource group if it's a temporary validation group
+        if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
+          Write-Host "🗂️ Deleting validation resource group: ${{ inputs.validation-rg }}"
+          try {
+            Remove-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Force -AsJob
+            Write-Host "✅ Resource group deletion job started"
+          } catch {
+            Write-Host "❌ Error deleting resource group: $_"
+          }
+        } else {
+          Write-Host "🔒 Keeping build resource group: ${{ inputs.validation-rg }} (as requested)"
+        }
+
+        # Delete the image template if one was specified
+        if (-not [string]::IsNullOrEmpty('${{ inputs.image-template-name }}')) {
+          Write-Host "📋 Deleting image template: ${{ inputs.image-template-name }}"
+          try {
+            Remove-AzResource `
+              -ResourceGroupName "${{ inputs.sig-resource-group }}" `
+              -ResourceType "Microsoft.VirtualMachineImages/imageTemplates" `
+              -Name "${{ inputs.image-template-name }}" `
+              -Force
+            Write-Host "✅ Image template deleted"
+          } catch {
+            Write-Host "❌ Error deleting image template: $_"
+          }
+        } else {
+          Write-Host "ℹ️ No image template specified, skipping template cleanup"
+        }
+
+        Write-Host "================================================================"
+        Write-Host "🎉 Cleanup process completed!"
+        
+        # Add cleanup summary to GitHub Actions
+        Write-Output "### 🧹 Cleanup Summary" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "* **VM Deleted**: ${{ inputs.validation-vm-name }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "* **Resource Group**: ${{ inputs.validation-rg }}" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
+          Write-Output "* **RG Status**: 🗑️ Deleted (temporary validation RG)" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        } else {
+          Write-Output "* **RG Status**: 🔒 Preserved (build RG)" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        }
+        if (-not [string]::IsNullOrEmpty('${{ inputs.image-template-name }}')) {
+          Write-Output "* **Image Template**: 🗑️ Deleted (${{ inputs.image-template-name }})" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        } else {
+          Write-Output "* **Image Template**: ℹ️ None specified" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        }
+        Write-Output "" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+        Write-Output "✅ **All validation resources have been successfully cleaned up!**" | Out-File -Append $env:GITHUB_STEP_SUMMARY

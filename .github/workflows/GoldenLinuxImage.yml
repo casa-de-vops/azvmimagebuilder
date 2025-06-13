@@ -1,0 +1,56 @@
+name: Linux Build and Distribution
+description: |
+  This workflow builds and distributes a custom VM image using the Azure Image Builder service.
+  It uses a template to create a shared image gallery image and distribute it across regions.
+on:
+  push:
+    branches: ["main"] # still limit to main
+    paths:
+      - "templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/**" # any file in that folder
+      - ".github/workflows/GoldenLinuxImage.yml" # keep if you really want it
+  pull_request: # run on PRs targeting main
+    branches: ["main"]
+    paths:
+      - "templates/1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image/**"
+  workflow_dispatch: # manual run button
+    inputs:
+      skipBuild:
+        description: "If true, skips building a new image and only runs validation on the latest image in the gallery."
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+  id-token: write
+  actions: read
+  security-events: write
+
+jobs:
+  run-image-builder:
+    uses: ./.github/workflows/template.yaml
+    name: Build and distribute custom VM image
+    with:
+      # === Template Configuration ===
+      templateFolder: "1_Creating_a_Custom_Linux_Shared_Image_Gallery_Image"
+      templateName: "GoldenLinuxImage.json"
+      templateType: "imageTemplate"
+
+      # === Azure Resources ===
+      sigResourceGroup: "rg-example-westus2-imagebuilder-001"
+      buildRGName: "rg-example-westus2-linux-001"
+      uaiIdentityName: "rai-identity"
+
+      # === Gallery Configuration ===
+      sigName: "appImageGallery"
+      imageDefName: "GoldenLinuxImage"
+      runOutputName: "GoldenLinuxImage"
+
+      # === Location Configuration ===
+      location: "westus2"
+      additionalregion: "eastus2"      # === VM Configuration ===
+      vm-os-type: "Linux"
+
+      # === Build Configuration ===
+      skipBuild: ${{ inputs.skipBuild || false }}
+    secrets: inherit

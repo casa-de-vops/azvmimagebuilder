@@ -1,0 +1,71 @@
+name: 'Validate Azure Resources'
+description: 'Validates that required Azure resources exist before VM deployment'
+inputs:
+  resource-group:
+    description: 'Target resource group name'
+    required: true
+  subnet-id:
+    description: 'Subnet resource ID for VM deployment'
+    required: true
+  keyvault-id:
+    description: 'Key Vault resource ID (required for Linux VMs)'
+    required: false
+  vm-type:
+    description: 'VM type (linux or windows)'
+    required: true
+    default: 'linux'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate Resource Group
+      shell: bash
+      run: |
+        echo "🔍 Validating Azure resources..."
+        
+        # Check if resource group exists
+        if ! az group show --name "${{ inputs.resource-group }}" --output none 2>/dev/null; then
+          echo "❌ Resource group '${{ inputs.resource-group }}' not found"
+          exit 1
+        fi
+        echo "✅ Resource group '${{ inputs.resource-group }}' found"
+
+    - name: Validate Subnet
+      shell: bash
+      run: |
+        # Check if subnet exists
+        SUBNET_ID="${{ inputs.subnet-id }}"
+        if [[ -n "${SUBNET_ID}" ]]; then
+          if ! az network vnet subnet show --ids "${SUBNET_ID}" --output none 2>/dev/null; then
+            echo "❌ Subnet '${SUBNET_ID}' not found"
+            exit 1
+          fi
+          echo "✅ Subnet validated successfully"
+        else
+          echo "❌ Subnet ID is required"
+          exit 1
+        fi
+
+    - name: Validate Key Vault (Linux only)
+      if: inputs.vm-type == 'linux'
+      shell: bash
+      run: |
+        # Check if Key Vault exists for Linux VMs
+        KEYVAULT_ID="${{ inputs.keyvault-id }}"
+        if [[ -n "${KEYVAULT_ID}" ]]; then
+          # Extract Key Vault name from resource ID
+          KEYVAULT_NAME=$(echo "${KEYVAULT_ID}" | sed 's|.*/||')
+          if ! az keyvault show --name "${KEYVAULT_NAME}" --output none 2>/dev/null; then
+            echo "❌ Key Vault '${KEYVAULT_NAME}' not found or not accessible"
+            exit 1
+          fi
+          echo "✅ Key Vault '${KEYVAULT_NAME}' validated successfully"
+        else
+          echo "❌ Key Vault ID is required for Linux VMs"
+          exit 1
+        fi
+
+    - name: Validation Complete
+      shell: bash
+      run: |
+        echo "✅ All Azure resources validated successfully"
