@@ -10,6 +10,13 @@ Click to launch the Azure portal pre-loaded with this template and parameter fil
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcasa-de-vops%2Fazvmimagebuilder%2Frefs%2Fheads%2Fmain%2Ftemplates%2F10_Virtual_Machine_Deployment_Template%2Fazuredeploy.linux.json)
 
+## Deploy the Golden-Windows VM
+
+Click to launch the Azure portal pre-loaded with this template and parameter file, then fill in or review the required parameters:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fcasa-de-vops%2Fazvmimagebuilder%2Frefs%2Fheads%2Fmain%2Ftemplates%2F10_Virtual_Machine_Deployment_Template%2Fazuredeploy.windows.json)
+
+
 > **Tip**  
 > This repository is currently using the publicly hosted template located at `https://raw.githubusercontent.com/casa-de-vops/azvmimagebuilder/refs/heads/main/templates/10_Virtual_Machine_Deployment_Template/azuredeploy.linux.json`. If you want to use a different version of the template, you can download it and host it in your own storage account, or fork this repository and use the URL of your forked repository.
 
