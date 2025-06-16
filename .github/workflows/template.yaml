@@ -154,7 +154,7 @@ jobs:
       SUB_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       SIG_NAME: ${{ inputs.sigName }}
       IMAGE_DEF: ${{ inputs.imageDefName }}
-      VALIDATION_VM_NAME: ${{ inputs.skipBuild != true && format('vm-val-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) || format('vm-val-{0}', github.run_number) }}
+      VALIDATION_VM_NAME: ${{ inputs.skipBuild != true && format('vmval{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) || format('vmval{0}', github.run_number) }}
       VALIDATION_RG: ${{ inputs.buildRGName != '' && inputs.buildRGName || (inputs.skipBuild != true && format('rg-img-validation-{0}', needs.PREPARE-IMAGE-TEMPLATE.outputs.release_version) || format('rg-img-validation-latest-{0}', github.run_number)) }}
       BUILD_RG_NAME: ${{ inputs.buildRGName }}
       VALIDATION_KV_NAME: ${{ inputs.validation-kv-name }}
