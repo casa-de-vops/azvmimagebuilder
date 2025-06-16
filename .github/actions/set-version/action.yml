@@ -1,0 +1,29 @@
+name: 'Set Version'
+description: 'Sets version information for the image template'
+
+inputs:
+  run-output-name:
+    required: true
+    description: 'The base name for the image template output'
+
+outputs:
+  release_version:
+    description: "The release version"
+    value: ${{ steps.set_version.outputs.release_version }}
+  image_template_name:
+    description: "The image template name"
+    value: ${{ steps.set_version.outputs.image_template_name }}
+
+runs:
+  using: 'composite'
+  steps:
+    # ── Version = run‑number‑shortSHA ───────────────────────────
+    - name: Set version
+      id: set_version
+      shell: bash
+      run: |
+        set -euo pipefail
+        SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+        VERSION="${GITHUB_RUN_NUMBER}-${SHORT_SHA}"
+        echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "image_template_name=${{ inputs.run-output-name }}-${VERSION}" >> "$GITHUB_OUTPUT"

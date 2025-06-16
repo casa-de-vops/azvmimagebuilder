@@ -1,0 +1,254 @@
+name: "Validate VM Image"
+description: "Validates a custom VM image by deploying a test VM"
+
+inputs:
+  sig-resource-group:
+    required: true
+    description: "The resource group for the Shared Image Gallery"
+  template-type:
+    required: true
+    description: "The template type (armTemplate or imageTemplate)"
+  image-template-name:
+    required: true
+    description: "The image template name"
+  primary-region:
+    required: true
+    description: "The primary region for image distribution"
+  subscription-id:
+    required: true
+    description: "Azure subscription ID"
+  sig-name:
+    required: true
+    description: "The Shared Image Gallery name"  
+  image-def-name:
+    required: true
+    description: "The image definition name"
+  validation-kv-name:
+    required: false
+    description: "The name of the Key Vault for storing secrets, if not specified will create one"
+    default: ""
+  validation-vm-name:
+    required: true
+    description: "The name for the validation VM"
+  validation-rg:
+    required: true
+    description: "The resource group for validation"
+  build-rg-name:
+    required: false
+    description: "The build resource group name, if specified will use this instead of creating a new validation RG"
+    default: ""
+  vm-os-type:
+    required: true
+    description: "The OS type of the VM (Linux or Windows)"
+  skip-distribution-wait:
+    required: false
+    description: "If true, skips waiting for image distribution to complete, useful when validating existing images"
+    default: false
+
+outputs:
+  vm-name:
+    description: "The name of the deployed validation VM"
+    value: ${{ inputs.validation-vm-name }}
+  resource-group:
+    description: "The resource group containing the validation VM"
+    value: ${{ inputs.validation-rg }}
+  image-id:
+    description: "The ID of the validated image"
+    value: ${{ steps.deploy-vm.outputs.image-id }}
+
+runs:
+  using: "composite"
+  steps:
+    # ── Wait for image distribution to complete ──────────────────
+    - name: Wait for image distribution to complete
+      if: inputs.skip-distribution-wait != 'true'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        Write-Host "Waiting for image distribution to complete..."
+
+        # Wait for the image distribution to finish (checking template status)
+        $maxRetries = 60  # 30 minutes (checking every 30 seconds)
+        $retryCount = 0
+        $success = $false
+
+        do {
+          $retryCount++
+          $res = Get-AzResource `
+            -ResourceGroupName "${{ inputs.sig-resource-group }}" `
+            -ResourceType 'Microsoft.VirtualMachineImages/imageTemplates' `
+            -Name "${{ inputs.image-template-name }}" `
+            -ErrorAction SilentlyContinue
+          
+          if ($res -and $res.Properties.lastRunStatus) {
+            $status = $res.Properties.lastRunStatus
+            Write-Host "[$retryCount/$maxRetries] Image status: $($status.runState) → $($status.runSubState)"
+            
+            if ($status.runState -eq 'Succeeded') {
+              $success = $true
+              break
+            }
+            elseif ($status.runState -eq 'Failed' -or $status.runState -eq 'Canceled') {
+              Write-Host "Image creation failed with status: $($status.runState)"
+              Write-Host "Error: $($status.message)"
+              exit 1
+            }
+          }
+          else {
+            Write-Host "[$retryCount/$maxRetries] Waiting for image template status..."
+          }
+          
+          Start-Sleep -Seconds 30
+        } while ($retryCount -lt $maxRetries)
+
+        if (-not $success) {
+          Write-Host "Timed out waiting for image distribution to complete!"
+          exit 1
+        }
+
+        Write-Host "Image distribution completed successfully!"
+
+    # ── Create resource group for validation VM ─────────────────
+    - name: Create validation resource group
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # Check if we should use the build RG instead of creating a new one
+        if ([string]::IsNullOrEmpty('${{ inputs.build-rg-name }}')) {
+          Write-Host "Creating new validation resource group: ${{ inputs.validation-rg }}"
+          New-AzResourceGroup -Name "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}" -Force
+        } else {
+          Write-Host "Using existing build resource group for validation: ${{ inputs.build-rg-name }}"
+          # Validate that the resource group exists
+          Get-AzResourceGroup -Name "${{ inputs.validation-rg }}" -ErrorAction Stop | Out-Null
+        }
+
+        Write-Host "Using validation resource group: ${{ inputs.validation-rg }}"
+
+    # ── Deploy validation VM using the new image ────────────────
+    - name: Deploy validation VM
+      id: deploy-vm
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        # Get the latest image version
+        $imageId = (Get-AzGalleryImageVersion -ResourceGroupName "${{ inputs.sig-resource-group }}" -GalleryName "${{ inputs.sig-name }}" -GalleryImageDefinitionName "${{ inputs.image-def-name }}" | 
+          Where-Object { $_.PublishingProfile.PublishedDate -ne $null -and $_.ProvisioningState -eq "Succeeded" } | 
+          Sort-Object -Property { [datetime]$_.PublishingProfile.PublishedDate } -Descending |
+          Select-Object -First 1).Id
+          
+        if (-not $imageId) {
+          Write-Host "Could not find image in gallery. Validation failed."
+          exit 1
+        }
+
+        Write-Host "Found image ID: $imageId"
+        echo "image-id=$imageId" >> $env:GITHUB_OUTPUT
+
+        # Helper function to generate a secure password
+        function Generate-SecurePassword {
+            $upper   = [char[]]'ABCDEFGHIJKLMNOPQRSTUVWXYZ' | Get-Random -Count 3
+            $lower   = [char[]]'abcdefghijklmnopqrstuvwxyz' | Get-Random -Count 3
+            $digits  = [char[]]'0123456789' | Get-Random -Count 3
+            $special = [char[]]'!@#$%^&*()-_=+[]{}|;:,.<>?/' | Get-Random -Count 3
+            $rest    = [char[]]'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?/' | Get-Random -Count 4
+            $allChars = $upper + $lower + $digits + $special + $rest | Get-Random -Count 16
+            -join $allChars
+        }
+
+        # Generate a random password for the VM
+        $adminPassword = Generate-SecurePassword
+        $adminPasswordSecure = ConvertTo-SecureString $adminPassword -AsPlainText -Force
+        Write-Host "Random admin password generated."
+
+        # Create key vault if it doesn't exist, generating a valid name (must be 3-24 characters, alphanumeric, and globally unique)
+        $rawName = "kv${{ inputs.validation-vm-name }}"
+        $keyVaultName = ($rawName -replace '[^a-zA-Z0-9]', '')[0..([Math]::Min(23, $rawName.Length - 1))] -join ''
+        $keyVault = Get-AzKeyVault -VaultName $keyVaultName -ErrorAction SilentlyContinue
+
+        if (-not $keyVault) {
+          Write-Host "Creating Key Vault: $keyVaultName"
+          $keyVault = New-AzKeyVault -Name $keyVaultName -ResourceGroupName "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}"
+        } else {
+          Write-Host "Key Vault already exists: $keyVaultName"
+        }
+
+        # Store the admin password in key vault
+        $secretName = "${{ inputs.validation-vm-name }}-admin-password"
+        Write-Host "Storing password in Key Vault as secret: $secretName"
+        Set-AzKeyVaultSecret -VaultName $keyVaultName -Name $secretName -SecretValue $adminPasswordSecure | Out-Null
+
+        # Create Public IP
+        $publicIpName = "${{ inputs.validation-vm-name }}-pip"
+        $publicIp = New-AzPublicIpAddress -Name $publicIpName `
+          -ResourceGroupName "${{ inputs.validation-rg }}" `
+          -Location "${{ inputs.primary-region }}" `
+          -AllocationMethod Static `
+          -Sku Basic
+        Write-Host "Created public IP: $($publicIp.IpAddress)"        # Use provided subnet ID from environment
+        $subnetResourceId = $env:SUBNET_ID
+        Write-Host "Using provided subnet resource ID: $subnetResourceId"
+
+        # Create NIC in provided subnet
+        $nicName = "${{ inputs.validation-vm-name }}-nic"
+        $nic = New-AzNetworkInterface -Name $nicName `
+          -ResourceGroupName "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}" -SubnetId $subnetResourceId -PublicIpAddressId $publicIp.Id
+        Write-Host "Network interface created with specified subnet and public IP: $($publicIp.IpAddress)"
+
+        # Create credential
+        $cred = New-Object System.Management.Automation.PSCredential ("azureuser", $adminPasswordSecure)
+
+        # Determine OS type
+        $vmOsType = "${{ inputs.vm-os-type }}".ToLower()
+        $vmConfig = New-AzVMConfig -VMName "${{ inputs.validation-vm-name }}" -VMSize "Standard_D2s_v3"
+
+        if ($vmOsType -eq "linux") {
+          Write-Host "Configuring VM as Linux"
+          $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig `
+            -Linux `
+            -ComputerName "${{ inputs.validation-vm-name }}" `
+            -Credential $cred `
+            -DisablePasswordAuthentication:$false
+        }
+        elseif ($vmOsType -eq "windows") {
+          Write-Host "Configuring VM as Windows"
+          $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig `
+            -Windows `
+            -ComputerName "${{ inputs.validation-vm-name }}" `
+            -Credential $cred `
+            -ProvisionVMAgent `
+            -EnableAutoUpdate
+        }
+        else {
+          Write-Host "Invalid OS type specified: $vmOsType"
+          exit 1
+        }
+
+        # Add image and NIC to VM config
+        $vmConfig = Set-AzVMSourceImage -VM $vmConfig -Id $imageId
+        $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id
+
+        # Deploy the VM
+        Write-Host "Deploying validation VM..."
+        New-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Location "${{ inputs.primary-region }}" -VM $vmConfig
+
+        Write-Host "VM deployment completed. Waiting for VM to be ready..."
+
+        # Wait for VM to be ready
+        Start-Sleep -Seconds 60
+
+        # Check VM status
+        $vmStatus = (Get-AzVM -ResourceGroupName "${{ inputs.validation-rg }}" -Name "${{ inputs.validation-vm-name }}" -Status).Statuses | 
+          Where-Object { $_.Code -like "PowerState/*" } | 
+          Select-Object -ExpandProperty DisplayStatus
+          
+        Write-Host "VM Status: $vmStatus"
+
+        if ($vmStatus -ne "VM running") {
+          Write-Host "VM is not running. Validation failed."
+          exit 1
+        }
+
+        Write-Host "Validation VM deployed and running successfully!"

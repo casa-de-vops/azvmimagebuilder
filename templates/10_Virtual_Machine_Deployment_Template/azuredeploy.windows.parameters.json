@@ -1,0 +1,24 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "vmName": {
+            "value": "<vm-name>"
+        },
+        "adminUsername": {
+            "value": "<admin-username>"
+        },
+        "adminPassword": {
+            "value": "<admin-password>"
+        },
+        "vmSize": {
+            "value": "<vm-size>"
+        },
+        "imageName": {
+            "value": "<image-name>"
+        },
+        "imageVersion": {
+            "value": "<image-version>"
+        }
+    }
+}

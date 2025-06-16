@@ -1,0 +1,117 @@
+name: 'Generate Deployment Report'
+description: 'Generates comprehensive deployment report with outputs and next steps'
+inputs:
+  environment:
+    description: 'Deployment environment'
+    required: true
+  vm-type:
+    description: 'VM type (linux or windows)'
+    required: true
+  vm-name:
+    description: 'Virtual machine name'
+    required: true
+  image-name:
+    description: 'Gallery image name'
+    required: true
+  vm-size:
+    description: 'Virtual machine size'
+    required: true
+  resource-group:
+    description: 'Resource group name'
+    required: true
+  deployment-name:
+    description: 'Deployment name'
+    required: true
+  vm-resource-id:
+    description: 'VM resource ID from deployment'
+    required: false
+  private-ip:
+    description: 'VM private IP address'
+    required: false
+  network-interface-id:
+    description: 'Network interface resource ID'
+    required: false
+  enable-auto-shutdown:
+    description: 'Auto-shutdown status (Windows only)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Generate Deployment Summary
+      shell: bash
+      run: |
+        echo "## 🎉 VM Deployment Completed Successfully!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment**: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Type**: ${{ inputs.vm-type }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Name**: ${{ inputs.vm-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image**: ${{ inputs.image-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **VM Size**: ${{ inputs.vm-size }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Resource Group**: ${{ inputs.resource-group }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployment Name**: ${{ inputs.deployment-name }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+    - name: Add Deployment Outputs
+      if: inputs.vm-resource-id != ''
+      shell: bash
+      run: |
+        echo "### Deployment Outputs" >> $GITHUB_STEP_SUMMARY
+        [[ -n "${{ inputs.vm-resource-id }}" ]] && echo "- **VM Resource ID**: \`${{ inputs.vm-resource-id }}\`" >> $GITHUB_STEP_SUMMARY
+        [[ -n "${{ inputs.vm-name }}" ]] && echo "- **VM Name**: \`${{ inputs.vm-name }}\`" >> $GITHUB_STEP_SUMMARY
+        [[ -n "${{ inputs.private-ip }}" ]] && echo "- **Private IP**: \`${{ inputs.private-ip }}\`" >> $GITHUB_STEP_SUMMARY
+        [[ -n "${{ inputs.network-interface-id }}" ]] && echo "- **Network Interface ID**: \`${{ inputs.network-interface-id }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+    - name: Add Next Steps for Linux
+      if: inputs.vm-type == 'linux'
+      shell: bash
+      run: |
+        echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "1. **SSH Access**: Use your SSH key and certificate to connect to the VM" >> $GITHUB_STEP_SUMMARY
+        echo "   \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "   ssh -i ~/.ssh/your-key.pem ${{ inputs.vm-name }}@${{ inputs.private-ip }}" >> $GITHUB_STEP_SUMMARY
+        echo "   \`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "2. **Azure Arc**: The VM should automatically register with Azure Arc for hybrid management" >> $GITHUB_STEP_SUMMARY
+        echo "3. **Monitoring**: Check Azure Monitor for VM health and performance metrics" >> $GITHUB_STEP_SUMMARY
+        echo "4. **Security**: Review Network Security Group rules and Key Vault access" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+    - name: Add Next Steps for Windows
+      if: inputs.vm-type == 'windows'
+      shell: bash
+      run: |
+        echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "1. **RDP Access**: Connect using Remote Desktop with the admin credentials" >> $GITHUB_STEP_SUMMARY
+        echo "   - **Address**: ${{ inputs.private-ip }}" >> $GITHUB_STEP_SUMMARY
+        echo "   - **Username**: Use the configured admin username" >> $GITHUB_STEP_SUMMARY
+        echo "   - **Password**: Use the configured admin password" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ inputs.enable-auto-shutdown }}" == "true" ]]; then
+          echo "2. **Auto-Shutdown**: ✅ Enabled - VM will shutdown automatically to save costs" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "2. **Auto-Shutdown**: ❌ Disabled - Remember to shutdown manually to save costs" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "3. **Monitoring**: Check Azure Monitor for VM health and performance metrics" >> $GITHUB_STEP_SUMMARY
+        echo "4. **Security**: Review Network Security Group rules and RDP access policies" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+    - name: Add Management Links
+      shell: bash
+      run: |
+        echo "### Management Links" >> $GITHUB_STEP_SUMMARY
+        echo "- 🖥️ [Azure Portal - Virtual Machines](https://portal.azure.com/#view/Microsoft_Azure_Compute/VirtualMachinesMenuBlade/~/overview)" >> $GITHUB_STEP_SUMMARY
+        echo "- 📊 [Azure Monitor](https://portal.azure.com/#view/Microsoft_Azure_Monitoring/AzureMonitoringBrowseBlade/~/overview)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔒 [Network Security Groups](https://portal.azure.com/#view/Microsoft_Azure_Network/NetworkSecurityGroupsBlade)" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "${{ inputs.vm-type }}" == "linux" ]]; then
+          echo "- 🔑 [Key Vault](https://portal.azure.com/#view/Microsoft_Azure_KeyVault/KeyVaultsBlade)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔗 [Azure Arc](https://portal.azure.com/#view/Microsoft_Azure_HybridCompute/AzureArcCenterBlade/~/overview)" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
+        echo "**🎉 Deployment completed successfully at $(date)** " >> $GITHUB_STEP_SUMMARY
